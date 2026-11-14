@@ -1,0 +1,264 @@
+:root {
+  --paper: #ffffff;
+  --desk: #e9e6df;
+  --ink: #1e1e1e;
+  --muted: #6f6f6f;
+  --line: #d6d2c8;
+  --accent: #2f6fd6;
+  --warn: #b3261e;
+  --panel: #f7f5f0;
+  font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--desk);
+}
+
+button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+input[type="number"],
+input[type="text"],
+select {
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  width: 100%;
+}
+
+.layout {
+  display: grid;
+  grid-template-rows: 40px 1fr 24px;
+  grid-template-columns: 180px 1fr auto;
+  height: 100%;
+}
+
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar .title {
+  font-weight: 600;
+  margin-right: 12px;
+}
+
+.topbar .spacer {
+  flex: 1;
+}
+
+.statusbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.statusbar .warn {
+  color: var(--warn);
+}
+
+.strip {
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+
+.strip .thumb {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.strip .thumb.current {
+  border-color: var(--accent);
+}
+
+.strip .thumb svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.strip .label {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.canvas-wrap {
+  position: relative;
+  overflow: auto;
+  outline: none;
+}
+
+.canvas-wrap svg.canvas {
+  display: block;
+  margin: 24px auto;
+}
+
+.inspector {
+  width: 240px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+
+.inspector h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.inspector .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+
+.inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.inspector .row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.inspector .path {
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+  text-align: center;
+}
+
+.ime-panel {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+
+.ime-panel h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.ime-panel .frame {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  margin-top: 8px;
+}
+
+.ime-panel .frame svg {
+  display: block;
+}
+
+.ime-panel .frame textarea {
+  position: absolute;
+  width: 1px;
+  height: 1em;
+  opacity: 0.01;
+  border: none;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  overflow: hidden;
+  font-size: 16px;
+}
+
+.ime-panel .frame .edit-host {
+  position: absolute;
+  inset: 0;
+  outline: none;
+}
+
+.ime-panel .log {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  max-height: 120px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 4px;
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+.ime-panel .modes {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
