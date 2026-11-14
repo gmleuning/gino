@@ -1,0 +1,11 @@
+[package]
+name = "ginos-cli"
+description = "Gino's command-line program: spike, export and debugging dumps"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ginos-core = { path = "../ginos-core" }
+clap = { workspace = true }
