@@ -1,10 +1,13 @@
-//! The scene: per page, a list of drawable items with every glyph already
-//! positioned. Both renderers consume only this. Lengths are millimetres on the
-//! page; type sizes are points.
+//! The scene: per page, per frame, a list of drawable items with every glyph
+//! already positioned. Both renderers consume only this. Lengths are
+//! millimetres on the page; type sizes are points.
 
 use std::fmt;
 use std::ops::Range;
 use std::sync::Arc;
+
+use crate::images::LoadedImage;
+use crate::model::Rect;
 
 /// An opaque colour. Also used as Parley's brush type.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -86,10 +89,7 @@ pub struct Stroke {
 
 #[derive(Clone, Debug)]
 pub struct RectItem {
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub h: f64,
+    pub rect: Rect,
     pub stroke: Option<Stroke>,
     pub fill: Option<Rgb>,
 }
@@ -103,11 +103,62 @@ pub struct RuleItem {
     pub stroke: Stroke,
 }
 
+/// A raster image: the whole picture at `placement`, clipped to `clip`.
+#[derive(Clone, Debug)]
+pub struct ImageItem {
+    pub image: Arc<LoadedImage>,
+    pub placement: Rect,
+    pub clip: Rect,
+}
+
 #[derive(Clone, Debug)]
 pub enum Item {
     Text(TextItem),
     Rect(RectItem),
     Rule(RuleItem),
+    Image(ImageItem),
+}
+
+impl Item {
+    pub fn translated(&self, dx: f64, dy: f64) -> Item {
+        match self {
+            Item::Text(text) => Item::Text(TextItem {
+                glyphs: text
+                    .glyphs
+                    .iter()
+                    .map(|glyph| Glyph {
+                        x: glyph.x + dx,
+                        y: glyph.y + dy,
+                        ..glyph.clone()
+                    })
+                    .collect(),
+                ..text.clone()
+            }),
+            Item::Rect(rect) => Item::Rect(RectItem {
+                rect: rect.rect.translated(dx, dy),
+                ..rect.clone()
+            }),
+            Item::Rule(rule) => Item::Rule(RuleItem {
+                x1: rule.x1 + dx,
+                y1: rule.y1 + dy,
+                x2: rule.x2 + dx,
+                y2: rule.y2 + dy,
+                stroke: rule.stroke,
+            }),
+            Item::Image(image) => Item::Image(ImageItem {
+                image: image.image.clone(),
+                placement: image.placement.translated(dx, dy),
+                clip: image.clip.translated(dx, dy),
+            }),
+        }
+    }
+}
+
+/// The drawable items of one frame, in drawing order.
+#[derive(Clone, Debug)]
+pub struct FrameScene {
+    pub id: String,
+    pub items: Vec<Item>,
 }
 
 #[derive(Clone, Debug)]
@@ -115,7 +166,14 @@ pub struct Page {
     /// Millimetres.
     pub width: f64,
     pub height: f64,
-    pub items: Vec<Item>,
+    /// Frames in stacking order, lowest first.
+    pub frames: Vec<FrameScene>,
+}
+
+impl Page {
+    pub fn items(&self) -> impl Iterator<Item = &Item> {
+        self.frames.iter().flat_map(|frame| frame.items.iter())
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -127,7 +185,7 @@ impl Scene {
     pub fn glyph_count(&self) -> usize {
         self.pages
             .iter()
-            .flat_map(|page| page.items.iter())
+            .flat_map(Page::items)
             .map(|item| match item {
                 Item::Text(text) => text.glyphs.len(),
                 _ => 0,

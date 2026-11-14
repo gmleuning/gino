@@ -5,14 +5,23 @@
 //! glyph for glyph, what the PDF contains.
 
 pub mod compose;
+pub mod edit;
 pub mod error;
+pub mod export;
 pub mod fonts;
+pub mod guides;
+pub mod hit;
+pub mod images;
 pub mod layout;
 pub mod model;
 pub mod render_pdf;
 pub mod render_svg;
 pub mod scene;
+pub mod session;
+pub mod snap;
 pub mod spike;
+pub mod spreads;
 pub mod units;
+pub mod zine;
 
 pub use error::Error;

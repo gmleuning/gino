@@ -6,10 +6,13 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use ginos_core::compose::compose;
+use ginos_core::export::{reader_pdf, write_pdf};
+use ginos_core::images::ImageCache;
 use ginos_core::fonts::{fixture_font_folder, Fonts};
 use ginos_core::render_pdf::scene_to_pdf;
 use ginos_core::render_svg::page_to_svg;
 use ginos_core::spike::{spike_document, SpikeFamilies};
+use ginos_core::zine::Zine;
 
 #[derive(Parser)]
 #[command(name = "ginos-cli", about = "Gino's command-line program", version)]
@@ -35,6 +38,19 @@ enum Command {
         #[arg(long)]
         korean_font: Option<PathBuf>,
     },
+    /// Exports a .zine folder as a PDF. `--mode reader` writes spreads for
+    /// screens; `--mode imposed` comes with milestone 3.
+    Export {
+        /// The .zine folder (or its document.json).
+        document: PathBuf,
+        #[arg(long, default_value = "reader")]
+        mode: String,
+        /// Sheet size for imposed export (milestone 3).
+        #[arg(long)]
+        sheet: Option<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
 }
 
 fn main() -> ExitCode {
@@ -45,6 +61,12 @@ fn main() -> ExitCode {
             latin_font,
             korean_font,
         } => spike(&out, latin_font, korean_font),
+        Command::Export {
+            document,
+            mode,
+            sheet,
+            out,
+        } => export(&document, &mode, sheet.as_deref(), &out),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -92,7 +114,8 @@ fn spike(out: &Path, latin_font: Option<PathBuf>, korean_font: Option<PathBuf>) 
     println!("Korean font: {} ({})", families.korean, korean_path.display());
 
     let document = spike_document(&families);
-    let composition = compose(&mut fonts, &document).map_err(|error| error.to_string())?;
+    let mut images = ImageCache::new(out);
+    let composition = compose(&mut fonts, &document, &mut images).map_err(|error| error.to_string())?;
     for overflow in &composition.overflows {
         println!(
             "Warning: story \"{}\" overflows its frames by {} characters.",
@@ -116,5 +139,37 @@ fn spike(out: &Path, latin_font: Option<PathBuf>, korean_font: Option<PathBuf>) 
     println!("Wrote {}", svg_path.display());
     println!("Wrote {}", pdf_path.display());
     println!("Wrote {}", json_path.display());
+    Ok(())
+}
+
+fn export(document: &Path, mode: &str, sheet: Option<&str>, out: &Path) -> Result<(), String> {
+    if mode != "reader" {
+        return Err(format!(
+            "export mode \"{mode}\" is not available yet; milestone 3 adds \"imposed\"."
+        ));
+    }
+    if sheet.is_some() {
+        return Err("--sheet applies to imposed export, which comes with milestone 3.".to_owned());
+    }
+    let zine = Zine::open(document).map_err(|error| error.to_string())?;
+    let mut fonts = Fonts::with_system_fonts();
+    for folder in zine.font_folders() {
+        fonts.add_folder(&folder);
+    }
+    let mut images = ImageCache::new(&zine.folder);
+    let (pdf, composition) =
+        reader_pdf(&mut fonts, &mut images, &zine.document).map_err(|error| error.to_string())?;
+    for overflow in &composition.overflows {
+        println!(
+            "Warning: story \"{}\" overflows its frames by {} characters.",
+            overflow.story, overflow.characters
+        );
+    }
+    for problem in &composition.image_problems {
+        println!("Warning: page {} frame \"{}\": {}", problem.page + 1, problem.frame, problem.message);
+    }
+    write_pdf(out, &pdf).map_err(|error| error.to_string())?;
+    let spreads = ginos_core::spreads::reader_spreads(zine.document.pages.len()).len();
+    println!("Wrote {} ({spreads} spreads)", out.display());
     Ok(())
 }

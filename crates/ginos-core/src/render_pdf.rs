@@ -5,10 +5,11 @@
 use std::collections::HashMap;
 
 use krilla::color::rgb;
-use krilla::geom::{Path, PathBuilder, Point, Rect};
+use krilla::geom::{Path, PathBuilder, Point, Rect, Size, Transform};
+use krilla::image::Image;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, Stroke};
+use krilla::paint::{Fill, FillRule, Stroke};
 use krilla::text::{Font, GlyphId, KrillaGlyph};
 use krilla::{Data, Document};
 
@@ -19,6 +20,7 @@ use crate::units::mm_to_pt;
 pub fn scene_to_pdf(scene: &Scene) -> Result<Vec<u8>, Error> {
     let mut document = Document::new();
     let mut fonts: HashMap<u64, Font> = HashMap::new();
+    let mut images: HashMap<*const u8, Image> = HashMap::new();
 
     for page in &scene.pages {
         let settings = PageSettings::from_wh(mm_to_pt(page.width) as f32, mm_to_pt(page.height) as f32)
@@ -29,7 +31,7 @@ pub fn scene_to_pdf(scene: &Scene) -> Result<Vec<u8>, Error> {
         let mut pdf_page = document.start_page_with(settings);
         let mut surface = pdf_page.surface();
 
-        for item in &page.items {
+        for item in page.items() {
             match item {
                 Item::Text(text) => {
                     let font = match fonts.get(&text.font.id) {
@@ -81,10 +83,10 @@ pub fn scene_to_pdf(scene: &Scene) -> Result<Vec<u8>, Error> {
                 }
                 Item::Rect(rect) => {
                     let Some(area) = Rect::from_xywh(
-                        mm_to_pt(rect.x) as f32,
-                        mm_to_pt(rect.y) as f32,
-                        mm_to_pt(rect.w) as f32,
-                        mm_to_pt(rect.h) as f32,
+                        mm_to_pt(rect.rect.x) as f32,
+                        mm_to_pt(rect.rect.y) as f32,
+                        mm_to_pt(rect.rect.w) as f32,
+                        mm_to_pt(rect.rect.h) as f32,
                     ) else {
                         continue;
                     };
@@ -103,6 +105,45 @@ pub fn scene_to_pdf(scene: &Scene) -> Result<Vec<u8>, Error> {
                         continue;
                     };
                     draw_path(&mut surface, &path, None, Some(rule.stroke));
+                }
+                Item::Image(image) => {
+                    let key = image.image.png.as_ptr();
+                    let pdf_image = match images.get(&key) {
+                        Some(found) => found.clone(),
+                        None => {
+                            let created = Image::from_png(Data::from(image.image.png.clone()), true)
+                                .map_err(|message| Error::Pdf(format!("an image could not be embedded: {message}")))?;
+                            images.insert(key, created.clone());
+                            created
+                        }
+                    };
+                    let Some(clip) = Rect::from_xywh(
+                        mm_to_pt(image.clip.x) as f32,
+                        mm_to_pt(image.clip.y) as f32,
+                        mm_to_pt(image.clip.w) as f32,
+                        mm_to_pt(image.clip.h) as f32,
+                    ) else {
+                        continue;
+                    };
+                    let Some(size) = Size::from_wh(
+                        mm_to_pt(image.placement.w) as f32,
+                        mm_to_pt(image.placement.h) as f32,
+                    ) else {
+                        continue;
+                    };
+                    let mut builder = PathBuilder::new();
+                    builder.push_rect(clip);
+                    let Some(clip_path) = builder.finish() else {
+                        continue;
+                    };
+                    surface.push_clip_path(&clip_path, &FillRule::NonZero);
+                    surface.push_transform(&Transform::from_translate(
+                        mm_to_pt(image.placement.x) as f32,
+                        mm_to_pt(image.placement.y) as f32,
+                    ));
+                    surface.draw_image(pdf_image, size);
+                    surface.pop();
+                    surface.pop();
                 }
             }
         }

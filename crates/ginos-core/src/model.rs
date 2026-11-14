@@ -53,6 +53,91 @@ impl Document {
     pub fn from_json(text: &str) -> Result<Self, Error> {
         Ok(serde_json::from_str(text)?)
     }
+
+    /// The trim size of every page, in millimetres.
+    pub fn page_size(&self) -> Size {
+        self.document.trim
+    }
+
+    pub fn frame(&self, page: usize, frame_id: &str) -> Result<&Frame, Error> {
+        self.pages
+            .get(page)
+            .and_then(|page| page.frames.iter().find(|frame| frame.id == frame_id))
+            .ok_or_else(|| Error::MissingFrame {
+                page,
+                frame: frame_id.to_owned(),
+            })
+    }
+
+    pub fn frame_mut(&mut self, page: usize, frame_id: &str) -> Result<&mut Frame, Error> {
+        self.pages
+            .get_mut(page)
+            .and_then(|page| page.frames.iter_mut().find(|frame| frame.id == frame_id))
+            .ok_or_else(|| Error::MissingFrame {
+                page,
+                frame: frame_id.to_owned(),
+            })
+    }
+
+    /// Whether a page sits on the left of its spread (an even page number).
+    pub fn is_left_page(page_index: usize) -> bool {
+        (page_index + 1) % 2 == 0
+    }
+}
+
+/// An axis-aligned rectangle in millimetres.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+impl Rect {
+    pub fn new(x: f64, y: f64, w: f64, h: f64) -> Self {
+        Self { x, y, w, h }
+    }
+
+    pub fn right(&self) -> f64 {
+        self.x + self.w
+    }
+
+    pub fn bottom(&self) -> f64 {
+        self.y + self.h
+    }
+
+    pub fn centre_x(&self) -> f64 {
+        self.x + self.w / 2.0
+    }
+
+    pub fn centre_y(&self) -> f64 {
+        self.y + self.h / 2.0
+    }
+
+    pub fn contains(&self, x: f64, y: f64) -> bool {
+        x >= self.x && x <= self.right() && y >= self.y && y <= self.bottom()
+    }
+
+    pub fn translated(&self, dx: f64, dy: f64) -> Self {
+        Self {
+            x: self.x + dx,
+            y: self.y + dy,
+            ..*self
+        }
+    }
+
+    /// Rounds every value to a hundredth of a millimetre, which is what the
+    /// inspector shows and the file stores.
+    pub fn rounded(&self) -> Self {
+        let round = |value: f64| (value * 100.0).round() / 100.0;
+        Self {
+            x: round(self.x),
+            y: round(self.y),
+            w: round(self.w),
+            h: round(self.h),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -245,6 +330,29 @@ pub enum FrameKind {
     PageNumber,
 }
 
+/// How an image is placed in its frame.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageFit {
+    /// Scale to cover the frame, centred; the overflow is cropped.
+    #[default]
+    Fill,
+    /// Scale to fit inside the frame, centred.
+    Fit,
+    /// Use [`Frame::crop`] as set by the user.
+    Manual,
+}
+
+/// Manual placement of an image inside its frame.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct ImageCrop {
+    /// Image top left corner relative to the frame's top left corner, in millimetres.
+    pub offset_x: f64,
+    pub offset_y: f64,
+    /// Millimetres per image pixel.
+    pub scale: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Frame {
     pub id: String,
@@ -264,6 +372,10 @@ pub struct Frame {
     /// Image frames: path relative to the `.zine` folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    #[serde(default)]
+    pub fit: ImageFit,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crop: Option<ImageCrop>,
     /// Rectangles and rules: stroke width in millimetres. Zero means no stroke.
     #[serde(default)]
     pub stroke_width: f64,
@@ -288,10 +400,27 @@ impl Frame {
             story: Some(story.to_owned()),
             thread_index: Some(thread_index),
             image: None,
+            fit: ImageFit::Fill,
+            crop: None,
             stroke_width: 0.0,
             filled: false,
             grey: 0.0,
         }
+    }
+
+    pub fn image(id: &str, x: f64, y: f64, w: f64, h: f64, image: Option<&str>) -> Self {
+        Self {
+            kind: FrameKind::Image,
+            image: image.map(str::to_owned),
+            ..Self::text(id, x, y, w, h, "", 0)
+        }
+        .without_story()
+    }
+
+    fn without_story(mut self) -> Self {
+        self.story = None;
+        self.thread_index = None;
+        self
     }
 
     pub fn rectangle(id: &str, x: f64, y: f64, w: f64, h: f64, stroke_width: f64, grey: f64) -> Self {
@@ -306,10 +435,23 @@ impl Frame {
             story: None,
             thread_index: None,
             image: None,
+            fit: ImageFit::Fill,
+            crop: None,
             stroke_width,
             filled: false,
             grey,
         }
+    }
+
+    pub fn rect(&self) -> Rect {
+        Rect::new(self.x, self.y, self.w, self.h)
+    }
+
+    pub fn set_rect(&mut self, rect: Rect) {
+        self.x = rect.x;
+        self.y = rect.y;
+        self.w = rect.w;
+        self.h = rect.h;
     }
 
     /// A rule from (x, y) to (x + w, y + h).

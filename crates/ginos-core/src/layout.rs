@@ -50,12 +50,23 @@ pub struct PlacedRun {
     pub glyphs: Vec<PlacedGlyph>,
 }
 
+/// An underline or similar decoration, in points relative to the frame.
+#[derive(Clone, Debug)]
+pub struct PlacedDecoration {
+    pub x1: f64,
+    pub x2: f64,
+    pub y: f64,
+    pub thickness: f64,
+    pub color: Rgb,
+}
+
 #[derive(Clone, Debug)]
 pub struct PlacedLine {
     pub top: f64,
     pub baseline: f64,
     pub bottom: f64,
     pub runs: Vec<PlacedRun>,
+    pub decorations: Vec<PlacedDecoration>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -142,6 +153,19 @@ pub fn break_lines(
     width: f64,
     first_line_indent: f64,
 ) -> Layout<Rgb> {
+    break_lines_with(fonts, text, style, width, first_line_indent, None)
+}
+
+/// As [`break_lines`], with an optional underlined range (used for text being
+/// composed by an input method).
+pub fn break_lines_with(
+    fonts: &mut Fonts,
+    text: &str,
+    style: &ParagraphStyle,
+    width: f64,
+    first_line_indent: f64,
+    underline: Option<Range<usize>>,
+) -> Layout<Rgb> {
     let korean_ranges: Vec<Range<usize>> = script_ranges(text)
         .into_iter()
         .filter(|(_, script)| *script == Script::Korean)
@@ -176,6 +200,9 @@ pub fn break_lines(
             StyleProperty::FontSize((style.size * style.korean_scale) as f32),
             range,
         );
+    }
+    if let Some(range) = underline.filter(|range| !range.is_empty() && range.end <= text.len()) {
+        builder.push(StyleProperty::Underline(true), range);
     }
 
     let mut layout = builder.build(text);
@@ -261,6 +288,15 @@ pub fn layout_story(
     Ok(result)
 }
 
+/// Places every line of a layout at `layout_top`, in frame points.
+pub fn place_lines(layout: &Layout<Rgb>, layout_top: f64, text: &str) -> Vec<PlacedLine> {
+    let mut faces = HashMap::new();
+    layout
+        .lines()
+        .map(|line| place_line(&line, layout_top, text, &mut faces))
+        .collect()
+}
+
 fn place_line(
     line: &Line<'_, Rgb>,
     layout_top: f64,
@@ -269,6 +305,7 @@ fn place_line(
 ) -> PlacedLine {
     let metrics = line.metrics();
     let mut runs = Vec::new();
+    let mut decorations = Vec::new();
     for item in line.items() {
         let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
             continue;
@@ -288,6 +325,18 @@ fn place_line(
             .clone();
         let run_text_range = run.text_range();
         let run_text = layout_text[run_text_range.clone()].to_owned();
+        if let Some(underline) = &glyph_run.style().underline {
+            let font_metrics = run.font_metrics();
+            let offset = underline.offset.unwrap_or(font_metrics.underline_offset);
+            let thickness = underline.size.unwrap_or(font_metrics.underline_size).max(0.3);
+            decorations.push(PlacedDecoration {
+                x1: glyph_run.offset() as f64,
+                x2: (glyph_run.offset() + glyph_run.advance()) as f64,
+                y: layout_top + (metrics.baseline - offset) as f64,
+                thickness: thickness as f64,
+                color: underline.brush,
+            });
+        }
 
         // Text ranges per glyph come from the clusters; positions from Parley's
         // positioned glyphs. They line up one to one unless a style boundary
@@ -332,6 +381,7 @@ fn place_line(
         baseline: layout_top + metrics.baseline as f64,
         bottom: layout_top + metrics.block_max_coord as f64,
         runs,
+        decorations,
     }
 }
 

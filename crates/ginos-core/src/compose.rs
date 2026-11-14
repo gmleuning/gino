@@ -1,29 +1,42 @@
 //! Turns a document into a scene: lays out every story through its thread of
-//! frames and places the results, rectangles and rules on pages in millimetres.
+//! frames and places the results, images, rectangles and rules on pages in
+//! millimetres, one [`FrameScene`] per frame.
 
 use std::collections::HashMap;
 
 use crate::error::Error;
 use crate::fonts::Fonts;
+use crate::images::{placement, ImageCache};
 use crate::layout::{layout_story, FrameBox, FrameLayout};
 use crate::model::{Document, Frame, FrameKind};
-use crate::scene::{Glyph, Item, Page, RectItem, Rgb, RuleItem, Scene, Stroke, TextItem};
+use crate::scene::{
+    FrameScene, Glyph, ImageItem, Item, Page, RectItem, Rgb, RuleItem, Scene, Stroke, TextItem,
+};
 use crate::units::pt_to_mm;
 
 /// A story whose text did not fit in its frames.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Overflow {
     pub story: String,
     pub characters: usize,
+}
+
+/// An image frame whose picture could not be loaded.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ImageProblem {
+    pub page: usize,
+    pub frame: String,
+    pub message: String,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Composition {
     pub scene: Scene,
     pub overflows: Vec<Overflow>,
+    pub image_problems: Vec<ImageProblem>,
 }
 
-pub fn compose(fonts: &mut Fonts, document: &Document) -> Result<Composition, Error> {
+pub fn compose(fonts: &mut Fonts, document: &Document, images: &mut ImageCache) -> Result<Composition, Error> {
     for style in &document.paragraph_styles {
         fonts.require_family(&style.latin_font)?;
         fonts.require_family(&style.korean_font)?;
@@ -72,20 +85,35 @@ pub fn compose(fonts: &mut Fonts, document: &Document) -> Result<Composition, Er
     }
 
     let mut scene = Scene::default();
-    for page in &document.pages {
-        let mut items = Vec::new();
+    let mut image_problems = Vec::new();
+    for (page_index, page) in document.pages.iter().enumerate() {
+        let mut frames = Vec::new();
         for frame in &page.frames {
+            let mut items = Vec::new();
             match frame.kind {
                 FrameKind::Text => {
                     if let Some(layout) = layouts.get(&frame.id) {
                         push_text(&mut items, frame, layout);
                     }
                 }
+                FrameKind::Image => {
+                    if let Some(stored) = &frame.image {
+                        match images.load(stored) {
+                            Ok(image) => items.push(Item::Image(ImageItem {
+                                placement: placement(frame, &image),
+                                clip: frame.rect(),
+                                image,
+                            })),
+                            Err(error) => image_problems.push(ImageProblem {
+                                page: page_index,
+                                frame: frame.id.clone(),
+                                message: error.to_string(),
+                            }),
+                        }
+                    }
+                }
                 FrameKind::Rectangle => items.push(Item::Rect(RectItem {
-                    x: frame.x,
-                    y: frame.y,
-                    w: frame.w,
-                    h: frame.h,
+                    rect: frame.rect(),
                     stroke: (frame.stroke_width > 0.0).then(|| Stroke {
                         width: frame.stroke_width,
                         color: Rgb::grey(frame.grey),
@@ -102,22 +130,36 @@ pub fn compose(fonts: &mut Fonts, document: &Document) -> Result<Composition, Er
                         color: Rgb::grey(frame.grey),
                     },
                 })),
-                // Images and page numbers come with later milestones.
-                FrameKind::Image | FrameKind::PageNumber => {}
+                // Page numbers come with milestone 4.
+                FrameKind::PageNumber => {}
             }
+            frames.push(FrameScene {
+                id: frame.id.clone(),
+                items,
+            });
         }
         scene.pages.push(Page {
             width: document.document.trim.width,
             height: document.document.trim.height,
-            items,
+            frames,
         });
     }
 
-    Ok(Composition { scene, overflows })
+    Ok(Composition {
+        scene,
+        overflows,
+        image_problems,
+    })
 }
 
-fn push_text(items: &mut Vec<Item>, frame: &Frame, layout: &FrameLayout) {
-    for line in &layout.lines {
+/// Converts a frame layout (points, frame-relative) into scene items
+/// (millimetres, page-relative).
+pub fn push_text(items: &mut Vec<Item>, frame: &Frame, layout: &FrameLayout) {
+    push_lines(items, frame.x, frame.y, &layout.lines);
+}
+
+pub fn push_lines(items: &mut Vec<Item>, x: f64, y: f64, lines: &[crate::layout::PlacedLine]) {
+    for line in lines {
         for run in &line.runs {
             if run.glyphs.is_empty() {
                 continue;
@@ -132,12 +174,24 @@ fn push_text(items: &mut Vec<Item>, frame: &Frame, layout: &FrameLayout) {
                     .iter()
                     .map(|glyph| Glyph {
                         id: glyph.id,
-                        x: frame.x + pt_to_mm(glyph.x),
-                        y: frame.y + pt_to_mm(glyph.y),
+                        x: x + pt_to_mm(glyph.x),
+                        y: y + pt_to_mm(glyph.y),
                         advance: pt_to_mm(glyph.advance),
                         text_range: glyph.text_range.clone(),
                     })
                     .collect(),
+            }));
+        }
+        for decoration in &line.decorations {
+            items.push(Item::Rule(RuleItem {
+                x1: x + pt_to_mm(decoration.x1),
+                y1: y + pt_to_mm(decoration.y),
+                x2: x + pt_to_mm(decoration.x2),
+                y2: y + pt_to_mm(decoration.y),
+                stroke: Stroke {
+                    width: pt_to_mm(decoration.thickness),
+                    color: decoration.color,
+                },
             }));
         }
     }

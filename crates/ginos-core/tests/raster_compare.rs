@@ -162,7 +162,8 @@ fn count_mismatches(a: &Grey, b: &Grey, width: usize, height: usize) -> usize {
 fn svg_and_pdf_of_the_spike_match_pixel_for_pixel() {
     let (mut fonts, families) = common::fixture_fonts();
     let document = spike_document(&families);
-    let composition = compose(&mut fonts, &document).expect("the spike composes");
+    let mut images = ginos_core::images::ImageCache::new(std::path::Path::new("."));
+    let composition = compose(&mut fonts, &document, &mut images).expect("the spike composes");
     assert!(composition.overflows.is_empty(), "the spike must not overflow: {:?}", composition.overflows);
     let page = &composition.scene.pages[0];
 

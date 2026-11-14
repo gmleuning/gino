@@ -1,41 +1,61 @@
 //! Scene to SVG. Glyphs are drawn as outlines: each distinct glyph of each
-//! font becomes one `<path>` in font units inside `<defs>`, and every
-//! occurrence is a `<use>` with a translate and scale. The webview never needs
-//! the font, and the outline is the same one the PDF embeds.
+//! font becomes one `<path>` in font units inside the frame's `<defs>`, and
+//! every occurrence is a `<use>` with a translate and scale. The webview never
+//! needs the font, and the outline is the same one the PDF embeds.
+//!
+//! Each frame renders to its own `<g>` fragment, so the canvas can replace one
+//! frame at a time; a page is the fragments wrapped in an `<svg>`.
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
+use base64::Engine as _;
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 
-use crate::scene::{FontFace, Item, Page, Rgb};
+use crate::scene::{FontFace, FrameScene, Item, Page, Rgb};
 use crate::units::pt_to_mm;
 
 /// Renders one page to a complete SVG document. The user unit is one millimetre.
 pub fn page_to_svg(page: &Page) -> String {
+    let mut body = String::new();
+    for frame in &page.frames {
+        body.push_str(&frame_to_svg(frame));
+    }
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}mm\" height=\"{h}mm\" viewBox=\"0 0 {w} {h}\">{body}</svg>",
+        w = num(page.width),
+        h = num(page.height),
+    )
+}
+
+/// Renders one frame to an SVG `<g>` fragment in page millimetres. Ids inside
+/// are prefixed with the frame id so fragments can share one document.
+pub fn frame_to_svg(frame: &FrameScene) -> String {
+    let prefix = id_safe(&frame.id);
     let mut defs = String::new();
     let mut body = String::new();
     let mut known: HashMap<(u64, u32), Option<f64>> = HashMap::new();
     let mut unit_cache: HashMap<u64, f64> = HashMap::new();
+    let mut clip_count = 0usize;
 
-    for item in &page.items {
+    for item in &frame.items {
         match item {
             Item::Text(text) => {
                 let _ = write!(body, "<g fill=\"{}\">", color(text.color));
                 for glyph in &text.glyphs {
                     let key = (text.font.id, glyph.id);
-                    let units_per_em = *known
-                        .entry(key)
-                        .or_insert_with(|| define_glyph(&mut defs, &text.font, glyph.id, &mut unit_cache));
+                    let units_per_em = *known.entry(key).or_insert_with(|| {
+                        define_glyph(&mut defs, &prefix, &text.font, glyph.id, &mut unit_cache)
+                    });
                     let Some(units_per_em) = units_per_em else {
                         continue;
                     };
                     let scale = pt_to_mm(text.size) / units_per_em;
                     let _ = write!(
                         body,
-                        "<use href=\"#g{}-{}\" transform=\"translate({} {}) scale({} {})\"/>",
+                        "<use href=\"#{prefix}-g{}-{}\" transform=\"translate({} {}) scale({} {})\"/>",
                         text.font.id,
                         glyph.id,
                         num(glyph.x),
@@ -51,10 +71,10 @@ pub fn page_to_svg(page: &Page) -> String {
                 let _ = write!(
                     body,
                     "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\"",
-                    num(rect.x),
-                    num(rect.y),
-                    num(rect.w),
-                    num(rect.h),
+                    num(rect.rect.x),
+                    num(rect.rect.y),
+                    num(rect.rect.w),
+                    num(rect.rect.h),
                     fill
                 );
                 if let Some(stroke) = rect.stroke {
@@ -79,20 +99,38 @@ pub fn page_to_svg(page: &Page) -> String {
                     num(rule.stroke.width)
                 );
             }
+            Item::Image(image) => {
+                clip_count += 1;
+                let clip_id = format!("{prefix}-clip{clip_count}");
+                let _ = write!(
+                    defs,
+                    "<clipPath id=\"{clip_id}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath>",
+                    num(image.clip.x),
+                    num(image.clip.y),
+                    num(image.clip.w),
+                    num(image.clip.h)
+                );
+                let encoded = base64::engine::general_purpose::STANDARD.encode(&image.image.png);
+                let _ = write!(
+                    body,
+                    "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" clip-path=\"url(#{clip_id})\" href=\"data:image/png;base64,{encoded}\"/>",
+                    num(image.placement.x),
+                    num(image.placement.y),
+                    num(image.placement.w),
+                    num(image.placement.h)
+                );
+            }
         }
     }
 
-    format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}mm\" height=\"{h}mm\" viewBox=\"0 0 {w} {h}\"><defs>{defs}</defs>{body}</svg>",
-        w = num(page.width),
-        h = num(page.height),
-    )
+    format!("<g data-frame=\"{prefix}\"><defs>{defs}</defs>{body}</g>")
 }
 
 /// Adds the glyph's outline to `defs` and returns the font's units per em, or
 /// `None` when the glyph has no outline (a space, for example).
 fn define_glyph(
     defs: &mut String,
+    prefix: &str,
     face: &FontFace,
     glyph_id: u32,
     unit_cache: &mut HashMap<u64, f64>,
@@ -109,8 +147,20 @@ fn define_glyph(
     if pen.path.is_empty() {
         return None;
     }
-    let _ = write!(defs, "<path id=\"g{}-{}\" d=\"{}\"/>", face.id, glyph_id, pen.path);
+    let _ = write!(defs, "<path id=\"{prefix}-g{}-{}\" d=\"{}\"/>", face.id, glyph_id, pen.path);
     Some(units_per_em)
+}
+
+/// Frame ids become part of SVG ids, which allow only a safe subset of characters.
+pub fn id_safe(id: &str) -> String {
+    let mut safe: String = id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    if safe.is_empty() || !safe.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        safe.insert(0, 'f');
+    }
+    safe
 }
 
 #[derive(Default)]
@@ -154,7 +204,7 @@ fn color(rgb: Rgb) -> String {
 }
 
 /// Millimetre values to four decimals, trailing zeros removed.
-fn num(value: f64) -> String {
+pub fn num(value: f64) -> String {
     trim(format!("{value:.4}"))
 }
 
@@ -196,11 +246,18 @@ mod tests {
     }
 
     #[test]
+    fn ids_are_made_safe() {
+        assert_eq!(id_safe("thread_a"), "thread_a");
+        assert_eq!(id_safe("본문 1"), "f___1");
+        assert_eq!(id_safe("1st"), "f1st");
+    }
+
+    #[test]
     fn empty_page_is_valid_svg() {
         let svg = page_to_svg(&Page {
             width: 148.0,
             height: 210.0,
-            items: Vec::new(),
+            frames: Vec::new(),
         });
         assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"148mm\""));
         assert!(svg.ends_with("</svg>"));
