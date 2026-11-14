@@ -97,7 +97,7 @@ one `<path>` in font units inside `<defs>`; each occurrence is a `<use>` with a
 translate and a scale (negative in y). The trade-off: the webview never needs
 the font file and shows the exact outline the PDF embeds, at the price of a
 larger SVG than text elements would give (the spike page is about 280 KB,
-about 1 150 glyph uses sharing about 420 outlines). Per-frame SVG in milestone
+1 149 glyph uses sharing 173 outlines). Per-frame SVG in milestone
 2 will share one outline cache across frames to keep that down.
 
 **PDF.** krilla's `draw_glyphs` with one glyph list per run. krilla advances a
