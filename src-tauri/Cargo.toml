@@ -1,6 +1,6 @@
 [package]
 name = "ginos-app"
-description = "Gino's desktop shell: commands between the interface and the core"
+description = "Gino desktop shell: commands between the interface and the core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

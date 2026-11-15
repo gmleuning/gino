@@ -1,8 +1,8 @@
-# Gino's
+# Gino
 
 A small, free, offline desktop program for laying out zines on Windows. Place text and images on pages, see them as spreads, and print a correctly imposed PDF that folds into a booklet on the first try.
 
-Gino's does one narrow job. It is not a general page-layout program and does not try to become one.
+Gino does one narrow job. It is not a general page-layout program and does not try to become one.
 
 > **Status:** in development. Nothing below is guaranteed to work until milestone 3 ("first usable version") is reached. See [Roadmap](#roadmap).
 
@@ -70,7 +70,7 @@ cargo run -p ginos-cli -- export path\to\my-zine.zine --mode imposed --out my-zi
 
 ---
 
-## Using Gino's
+## Using Gino
 
 1. **New document** → choose a fold format and a page count (rounded to the nearest valid count for that fold).
 2. **Place frames** with the keyboard: `T` text, `I` image, `R` rectangle, `L` rule, `V` select. Every command is also in the command palette (`Ctrl+K`).
@@ -86,13 +86,13 @@ If the printer has no automatic double-sided mode, print the odd-numbered pages 
 
 ### Fonts
 
-Gino's lists the fonts installed in Windows. Fonts that a font manager activates without installing may not appear; add their folders under **Settings → Font folders**. In the style editor, each paragraph style has a Latin font and a Korean font; change either at any time and the whole document reflows.
+Gino lists the fonts installed in Windows. Fonts that a font manager activates without installing may not appear; add their folders under **Settings → Font folders**. In the style editor, each paragraph style has a Latin font and a Korean font; change either at any time and the whole document reflows.
 
 ---
 
 ## Document format
 
-A Gino's document is a folder ending in `.zine`:
+A Gino document is a folder ending in `.zine`:
 
 ```
 my-zine.zine\

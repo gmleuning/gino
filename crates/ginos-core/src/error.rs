@@ -33,7 +33,7 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("the frame \"{frame}\" does not exist on page {page}")]
     MissingFrame { page: usize, frame: String },
-    #[error("{path} is not a Gino's document: {reason}")]
+    #[error("{path} is not a Gino document: {reason}")]
     NotAZine { path: PathBuf, reason: String },
     #[error("the image {path} could not be loaded: {message}")]
     Image { path: PathBuf, message: String },

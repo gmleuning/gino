@@ -1,4 +1,4 @@
-//! Gino's command-line program: the milestone 1 spike, PDF export (reader
+//! Gino command-line program: the milestone 1 spike, PDF export (reader
 //! spreads or imposed sheets) and the fold test sheet.
 
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ use ginos_core::spike::{fold_test_document, spike_document, SpikeFamilies};
 use ginos_core::zine::Zine;
 
 #[derive(Parser)]
-#[command(name = "ginos-cli", about = "Gino's command-line program", version)]
+#[command(name = "ginos-cli", about = "Gino command-line program", version)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

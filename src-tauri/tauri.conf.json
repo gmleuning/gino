@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Gino's",
+  "productName": "Gino",
   "version": "0.1.0",
   "identifier": "app.ginos",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Gino's",
+        "title": "Gino",
         "width": 1440,
         "height": 900,
         "minWidth": 960,

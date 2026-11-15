@@ -1,6 +1,6 @@
 [package]
 name = "ginos-cli"
-description = "Gino's command-line program: spike, export and debugging dumps"
+description = "Gino command-line program: spike, export and debugging dumps"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

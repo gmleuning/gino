@@ -1,4 +1,4 @@
-//! Gino's core: document model, text layout, scene building and rendering.
+//! Gino core: document model, text layout, scene building and rendering.
 //!
 //! The core lays out every glyph once. Both renderers ([`render_svg`] and
 //! [`render_pdf`]) consume only the [`scene`], so what the canvas shows is,

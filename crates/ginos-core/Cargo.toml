@@ -1,6 +1,6 @@
 [package]
 name = "ginos-core"
-description = "Gino's: document model, text layout, imposition, SVG and PDF rendering"
+description = "Gino: document model, text layout, imposition, SVG and PDF rendering"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

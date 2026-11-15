@@ -54,7 +54,7 @@
       "paragraphs": [
         { "style": "title", "runs": [{ "text": "밤의 산책" }] },
         { "style": "title", "runs": [{ "text": "A Night Walk" }] },
-        { "style": "caption", "runs": [{ "text": "A sample zine for Gino's. Eight pages, A5, saddle-stitched on A4." }] }
+        { "style": "caption", "runs": [{ "text": "A sample zine for Gino. Eight pages, A5, saddle-stitched on A4." }] }
       ]
     },
     {
@@ -77,7 +77,7 @@
     {
       "id": "back",
       "paragraphs": [
-        { "style": "caption", "runs": [{ "text": "Made with Gino's. Ⓐ" }] }
+        { "style": "caption", "runs": [{ "text": "Made with Gino. Ⓐ" }] }
       ]
     }
   ],
