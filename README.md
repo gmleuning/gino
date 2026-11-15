@@ -2,8 +2,6 @@
 
 A small, free, offline Windows program for laying out zines. Place text and images on pages, see them as spreads, and print pages that fold into a booklet on the first try.
 
-Gino does one narrow job. It is not a general page-layout program.
-
 ## What it does today
 
 - **Starts from a fold.** Choose A5 pages on A4, A6 pages on A5, the eight-page single-sheet fold, a custom page size, or a North American saddle stitch (Letter, Legal or Tabloid pages). Margins, gutter and sheet follow from the choice, and you can change them in the document panel.
