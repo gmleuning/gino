@@ -8,7 +8,7 @@ use std::path::Path;
 use ginos_core::fonts::{fixture_font_folder, Fonts};
 use ginos_core::images::ImageCache;
 use ginos_core::model::{ImageFit, Rect};
-use ginos_core::session::Session;
+use ginos_core::session::{Session, Tool};
 use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_syntax::Pdf;
 use hayro::vello_cpu::color::palette::css::WHITE;
@@ -61,7 +61,7 @@ fn dragging_a_frame_snaps_commits_one_command_and_undoes() {
     session.view().unwrap();
 
     // Press inside the picture frame on page 3 (index 2): it is selected.
-    let update = session.pointer_down(2, 50.0, 150.0, 2.0).unwrap();
+    let update = session.pointer_down(2, 50.0, 150.0, 2.0, Tool::Select, false, 1).unwrap();
     let selection = update.selection.expect("a frame is selected");
     assert_eq!(selection.frame_id, "picture");
     assert_eq!(selection.rect, Rect::new(14.0, 120.0, 123.0, 60.0));

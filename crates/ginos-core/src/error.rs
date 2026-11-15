@@ -39,4 +39,8 @@ pub enum Error {
     Image { path: PathBuf, message: String },
     #[error("no document is open")]
     NoDocument,
+    #[error("the change could not be made: {0}")]
+    Edit(String),
+    #[error("{0}")]
+    Invalid(String),
 }

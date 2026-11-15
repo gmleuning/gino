@@ -9,11 +9,14 @@ use fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{FontContext, LayoutContext};
 
 use crate::error::Error;
+use crate::layout::BreakCache;
 use crate::scene::Rgb;
 
 pub struct Fonts {
     pub context: FontContext,
     pub layout: LayoutContext<Rgb>,
+    /// Broken paragraphs, so an edit re-shapes only the paragraph it touches.
+    pub(crate) cache: BreakCache,
 }
 
 impl Fonts {
@@ -22,6 +25,7 @@ impl Fonts {
         Self {
             context: FontContext::new(),
             layout: LayoutContext::new(),
+            cache: BreakCache::default(),
         }
     }
 
@@ -37,6 +41,7 @@ impl Fonts {
                 source_cache: SourceCache::default(),
             },
             layout: LayoutContext::new(),
+            cache: BreakCache::default(),
         }
     }
 
@@ -48,6 +53,7 @@ impl Fonts {
         })?;
         let blob = Blob::new(Arc::new(bytes));
         let registered = self.context.collection.register_fonts(blob, None);
+        self.cache.clear();
         if registered.is_empty() {
             return Err(Error::NoFontInFile {
                 path: path.to_owned(),
@@ -67,6 +73,7 @@ impl Fonts {
     /// Registers every font file found in a folder (a user font folder).
     pub fn add_folder(&mut self, path: &Path) {
         self.context.collection.load_fonts_from_paths([path]);
+        self.cache.clear();
     }
 
     /// Every family name known to the font database, sorted, for the font pickers.

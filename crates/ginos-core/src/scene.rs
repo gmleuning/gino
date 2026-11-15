@@ -111,12 +111,62 @@ pub struct ImageItem {
     pub clip: Rect,
 }
 
+/// An affine transform: x' = a·x + c·y + e, y' = b·x + d·y + f (millimetres).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Transform {
+    pub a: f64,
+    pub b: f64,
+    pub c: f64,
+    pub d: f64,
+    pub e: f64,
+    pub f: f64,
+}
+
+impl Transform {
+    pub fn translate(x: f64, y: f64) -> Self {
+        Self {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: x,
+            f: y,
+        }
+    }
+
+    /// A half turn of a `width` by `height` box whose top left corner lands at (x, y).
+    pub fn half_turn(x: f64, y: f64, width: f64, height: f64) -> Self {
+        Self {
+            a: -1.0,
+            b: 0.0,
+            c: 0.0,
+            d: -1.0,
+            e: x + width,
+            f: y + height,
+        }
+    }
+
+    pub fn apply(&self, x: f64, y: f64) -> (f64, f64) {
+        (self.a * x + self.c * y + self.e, self.b * x + self.d * y + self.f)
+    }
+}
+
+/// Items drawn through a transform and clipped to a rectangle given in the
+/// items' own coordinates. Imposition places whole pages this way.
+#[derive(Clone, Debug)]
+pub struct GroupItem {
+    pub transform: Transform,
+    pub clip: Option<Rect>,
+    pub items: Vec<Item>,
+}
+
 #[derive(Clone, Debug)]
 pub enum Item {
     Text(TextItem),
     Rect(RectItem),
     Rule(RuleItem),
     Image(ImageItem),
+    Group(GroupItem),
 }
 
 impl Item {
@@ -149,6 +199,14 @@ impl Item {
                 image: image.image.clone(),
                 placement: image.placement.translated(dx, dy),
                 clip: image.clip.translated(dx, dy),
+            }),
+            Item::Group(group) => Item::Group(GroupItem {
+                transform: Transform {
+                    e: group.transform.e + dx,
+                    f: group.transform.f + dy,
+                    ..group.transform
+                },
+                ..group.clone()
             }),
         }
     }
@@ -183,13 +241,13 @@ pub struct Scene {
 
 impl Scene {
     pub fn glyph_count(&self) -> usize {
-        self.pages
-            .iter()
-            .flat_map(Page::items)
-            .map(|item| match item {
+        fn count(item: &Item) -> usize {
+            match item {
                 Item::Text(text) => text.glyphs.len(),
+                Item::Group(group) => group.items.iter().map(count).sum(),
                 _ => 0,
-            })
-            .sum()
+            }
+        }
+        self.pages.iter().flat_map(Page::items).map(count).sum()
     }
 }

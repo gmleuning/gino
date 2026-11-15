@@ -2,23 +2,75 @@
 //! frames and places the results, images, rectangles and rules on pages in
 //! millimetres, one [`FrameScene`] per frame.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::error::Error;
 use crate::fonts::Fonts;
 use crate::images::{placement, ImageCache};
-use crate::layout::{layout_story, FrameBox, FrameLayout};
-use crate::model::{Document, Frame, FrameKind};
+use crate::layout::{layout_story, FrameBox, FrameLayout, Underline};
+use crate::model::{Document, Frame, FrameKind, Run, Story};
 use crate::scene::{
     FrameScene, Glyph, ImageItem, Item, Page, RectItem, Rgb, RuleItem, Scene, Stroke, TextItem,
 };
+use crate::text::{clamp, CaretLine, TextPosition};
 use crate::units::pt_to_mm;
 
-/// A story whose text did not fit in its frames.
+/// A story whose text did not fit in its frames, and the frame it overflows from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Overflow {
     pub story: String,
     pub characters: usize,
+    pub page: usize,
+    pub frame: String,
+}
+
+/// Text an input method is composing: laid out in place, underlined, but not
+/// yet part of the document.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Preedit {
+    pub story: String,
+    pub position: TextPosition,
+    pub text: String,
+}
+
+/// The story with the preedit text inserted, and its underline.
+fn with_preedit(story: &Story, preedit: &Preedit) -> (Story, Underline) {
+    let mut story = story.clone();
+    let position = clamp(&story, preedit.position);
+    if story.paragraphs.is_empty() {
+        // The session gives every edited story a paragraph; nothing to show otherwise.
+        return (story, Underline { paragraph: 0, range: 0..0 });
+    }
+    let paragraph = &mut story.paragraphs[position.paragraph];
+    let mut text = paragraph.text();
+    text.insert_str(position.offset, &preedit.text);
+    // Styles do not matter for an underlined provisional syllable; keep the
+    // run boundaries by inserting into the run that holds the position.
+    let mut offset = 0;
+    let mut inserted = false;
+    for run in &mut paragraph.runs {
+        let end = offset + run.text.len();
+        if !inserted && position.offset >= offset && position.offset <= end {
+            run.text.insert_str(position.offset - offset, &preedit.text);
+            inserted = true;
+        }
+        offset = end;
+    }
+    if !inserted {
+        paragraph.runs.push(Run {
+            text: preedit.text.clone(),
+            character_style: None,
+        });
+    }
+    debug_assert_eq!(paragraph.text(), text);
+    (
+        story,
+        Underline {
+            paragraph: position.paragraph,
+            range: position.offset..position.offset + preedit.text.len(),
+        },
+    )
 }
 
 /// An image frame whose picture could not be loaded.
@@ -34,12 +86,33 @@ pub struct Composition {
     pub scene: Scene,
     pub overflows: Vec<Overflow>,
     pub image_problems: Vec<ImageProblem>,
+    /// Every laid-out line of every story, in thread order, for the caret.
+    pub story_lines: HashMap<String, Vec<CaretLine>>,
+    /// The frames of every story, in thread order, as (page, frame id).
+    pub threads: HashMap<String, Vec<(usize, String)>>,
 }
 
 pub fn compose(fonts: &mut Fonts, document: &Document, images: &mut ImageCache) -> Result<Composition, Error> {
+    compose_with(fonts, document, images, None)
+}
+
+/// [`compose`], with text being composed by an input method laid out in place.
+pub fn compose_with(
+    fonts: &mut Fonts,
+    document: &Document,
+    images: &mut ImageCache,
+    preedit: Option<&Preedit>,
+) -> Result<Composition, Error> {
     for style in &document.paragraph_styles {
         fonts.require_family(&style.latin_font)?;
         fonts.require_family(&style.korean_font)?;
+    }
+    // Where each frame sits, for caret lines in page coordinates.
+    let mut frame_pages: HashMap<&str, usize> = HashMap::new();
+    for (page_index, page) in document.pages.iter().enumerate() {
+        for frame in &page.frames {
+            frame_pages.insert(frame.id.as_str(), page_index);
+        }
     }
 
     // Collect every text frame per story, in thread order.
@@ -59,12 +132,21 @@ pub fn compose(fonts: &mut Fonts, document: &Document, images: &mut ImageCache) 
 
     let mut layouts: HashMap<String, FrameLayout> = HashMap::new();
     let mut overflows = Vec::new();
+    let mut story_lines = HashMap::new();
+    let mut thread_frames = HashMap::new();
     let mut story_ids: Vec<&str> = threads.keys().copied().collect();
     story_ids.sort();
     for story_id in story_ids {
         let mut frames = threads.remove(story_id).unwrap_or_default();
         frames.sort_by_key(|(index, _)| *index);
-        let story = document.story(story_id)?;
+        let stored = document.story(story_id)?;
+        let (story, underline) = match preedit.filter(|preedit| preedit.story == story_id && !preedit.text.is_empty()) {
+            Some(preedit) => {
+                let (story, underline) = with_preedit(stored, preedit);
+                (Cow::Owned(story), Some(underline))
+            }
+            None => (Cow::Borrowed(stored), None),
+        };
         let boxes: Vec<FrameBox> = frames
             .iter()
             .map(|(_, frame)| FrameBox {
@@ -72,13 +154,32 @@ pub fn compose(fonts: &mut Fonts, document: &Document, images: &mut ImageCache) 
                 height: frame.h,
             })
             .collect();
-        let story_layout = layout_story(fonts, document, story, &boxes)?;
+        let story_layout = layout_story(fonts, document, &story, &boxes, underline.as_ref())?;
         if story_layout.overflow_characters > 0 {
-            overflows.push(Overflow {
-                story: story_id.to_owned(),
-                characters: story_layout.overflow_characters,
-            });
+            if let Some((_, last)) = frames.last() {
+                overflows.push(Overflow {
+                    story: story_id.to_owned(),
+                    characters: story_layout.overflow_characters,
+                    page: frame_pages.get(last.id.as_str()).copied().unwrap_or(0),
+                    frame: last.id.clone(),
+                });
+            }
         }
+        let mut lines = Vec::new();
+        for ((_, frame), layout) in frames.iter().zip(&story_layout.frames) {
+            let page = frame_pages.get(frame.id.as_str()).copied().unwrap_or(0);
+            for line in &layout.lines {
+                lines.push(CaretLine::from_placed(page, &frame.id, frame.x, frame.y, line));
+            }
+        }
+        story_lines.insert(story_id.to_owned(), lines);
+        thread_frames.insert(
+            story_id.to_owned(),
+            frames
+                .iter()
+                .map(|(_, frame)| (frame_pages.get(frame.id.as_str()).copied().unwrap_or(0), frame.id.clone()))
+                .collect(),
+        );
         for ((_, frame), layout) in frames.iter().zip(story_layout.frames) {
             layouts.insert(frame.id.clone(), layout);
         }
@@ -149,6 +250,8 @@ pub fn compose(fonts: &mut Fonts, document: &Document, images: &mut ImageCache) 
         scene,
         overflows,
         image_problems,
+        story_lines,
+        threads: thread_frames,
     })
 }
 

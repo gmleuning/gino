@@ -1,23 +1,30 @@
 //! Text layout with Parley: script ranges for Latin and Korean font pairing,
-//! line breaking (behind the single function [`break_lines`], so hyphenation
-//! can be added later in one place), threading across frames and overflow.
+//! character styles, line breaking (behind the single function
+//! [`break_lines`], so hyphenation can be added later in one place),
+//! threading across frames and overflow.
+//!
+//! Broken paragraphs are cached by their text, style and width, so an edit
+//! re-shapes only the paragraph it touches; every other paragraph of the
+//! thread is reused and only moved.
 //!
 //! This module works in points, relative to the top left corner of a frame.
 //! [`crate::compose`] converts to millimetres on the page.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::Arc;
 
 use parley::{
-    Alignment as ParleyAlignment, AlignmentOptions, FontFamily, FontFamilyName, IndentOptions,
-    Layout, Line, LineHeight, PositionedLayoutItem, StyleProperty, WordBreak,
+    Alignment as ParleyAlignment, AlignmentOptions, FontFamily, FontFamilyName, FontStyle,
+    FontWeight, IndentOptions, Layout, Line, LineHeight, PositionedLayoutItem, StyleProperty,
+    WordBreak,
 };
 
 use crate::error::Error;
 use crate::fonts::Fonts;
-use crate::model::{Alignment, Document, KoreanBreak, ParagraphStyle, Story};
+use crate::model::{Alignment, CharacterStyle, Document, FontSlant, KoreanBreak, Paragraph, ParagraphStyle, Story};
 use crate::scene::{FontFace, Rgb};
 use crate::units::mm_to_pt;
 
@@ -47,6 +54,8 @@ pub struct PlacedRun {
     pub size: f64,
     pub color: Rgb,
     pub text: String,
+    /// Byte offset of [`PlacedRun::text`] within its paragraph.
+    pub text_offset: usize,
     pub glyphs: Vec<PlacedGlyph>,
 }
 
@@ -65,8 +74,51 @@ pub struct PlacedLine {
     pub top: f64,
     pub baseline: f64,
     pub bottom: f64,
+    /// Index of the paragraph within its story.
+    pub paragraph: usize,
+    /// Byte range of the line within its paragraph, trailing spaces included.
+    pub text_range: Range<usize>,
+    /// Where the line starts after alignment and indent, for an empty line's caret.
+    pub x_start: f64,
     pub runs: Vec<PlacedRun>,
     pub decorations: Vec<PlacedDecoration>,
+}
+
+impl PlacedLine {
+    fn moved(&self, dy: f64, paragraph: usize, offset: usize) -> PlacedLine {
+        PlacedLine {
+            top: self.top + dy,
+            baseline: self.baseline + dy,
+            bottom: self.bottom + dy,
+            paragraph,
+            text_range: self.text_range.start + offset..self.text_range.end + offset,
+            x_start: self.x_start,
+            runs: self
+                .runs
+                .iter()
+                .map(|run| PlacedRun {
+                    text_offset: run.text_offset + offset,
+                    glyphs: run
+                        .glyphs
+                        .iter()
+                        .map(|glyph| PlacedGlyph {
+                            y: glyph.y + dy,
+                            ..glyph.clone()
+                        })
+                        .collect(),
+                    ..run.clone()
+                })
+                .collect(),
+            decorations: self
+                .decorations
+                .iter()
+                .map(|decoration| PlacedDecoration {
+                    y: decoration.y + dy,
+                    ..decoration.clone()
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -144,28 +196,27 @@ pub fn script_ranges(text: &str) -> Vec<(Range<usize>, Script)> {
     ranges
 }
 
-/// Shapes and breaks one paragraph (or the remainder of one) into lines at the
-/// given width. This is the only place that decides where lines break.
-pub fn break_lines(
-    fonts: &mut Fonts,
-    text: &str,
-    style: &ParagraphStyle,
-    width: f64,
-    first_line_indent: f64,
-) -> Layout<Rgb> {
-    break_lines_with(fonts, text, style, width, first_line_indent, None)
+/// A range of text set in a character style.
+pub type Span<'a> = (Range<usize>, &'a CharacterStyle);
+
+/// Everything that decides how one paragraph (or the remainder of one) breaks.
+pub struct BreakInput<'a> {
+    pub text: &'a str,
+    pub style: &'a ParagraphStyle,
+    pub spans: &'a [Span<'a>],
+    /// Points.
+    pub width: f64,
+    /// Points.
+    pub first_line_indent: f64,
+    /// Text being composed by an input method, drawn underlined.
+    pub underline: Option<Range<usize>>,
 }
 
-/// As [`break_lines`], with an optional underlined range (used for text being
-/// composed by an input method).
-pub fn break_lines_with(
-    fonts: &mut Fonts,
-    text: &str,
-    style: &ParagraphStyle,
-    width: f64,
-    first_line_indent: f64,
-    underline: Option<Range<usize>>,
-) -> Layout<Rgb> {
+/// Shapes and breaks one paragraph (or the remainder of one) into lines.
+/// This is the only place that decides where lines break.
+pub fn break_lines(fonts: &mut Fonts, input: &BreakInput<'_>) -> Layout<Rgb> {
+    let text = input.text;
+    let style = input.style;
     let korean_ranges: Vec<Range<usize>> = script_ranges(text)
         .into_iter()
         .filter(|(_, script)| *script == Script::Korean)
@@ -201,12 +252,31 @@ pub fn break_lines_with(
             range,
         );
     }
-    if let Some(range) = underline.filter(|range| !range.is_empty() && range.end <= text.len()) {
+    for (range, character) in input.spans {
+        let range = range.start.min(text.len())..range.end.min(text.len());
+        if range.is_empty() {
+            continue;
+        }
+        if let Some(slant) = character.font_style {
+            let value = match slant {
+                FontSlant::Normal => FontStyle::Normal,
+                FontSlant::Italic => FontStyle::Italic,
+            };
+            builder.push(StyleProperty::FontStyle(value), range.clone());
+        }
+        if let Some(weight) = character.font_weight {
+            builder.push(StyleProperty::FontWeight(FontWeight::new(f32::from(weight))), range.clone());
+        }
+        if character.underline {
+            builder.push(StyleProperty::Underline(true), range.clone());
+        }
+    }
+    if let Some(range) = input.underline.clone().filter(|range| !range.is_empty() && range.end <= text.len()) {
         builder.push(StyleProperty::Underline(true), range);
     }
 
     let mut layout = builder.build(text);
-    layout.set_text_indent(first_line_indent as f32, IndentOptions::default());
+    layout.set_text_indent(input.first_line_indent as f32, IndentOptions::default());
     let alignment = match style.alignment {
         Alignment::Left => ParleyAlignment::Left,
         Alignment::Center => ParleyAlignment::Center,
@@ -214,8 +284,147 @@ pub fn break_lines_with(
         Alignment::Justify => ParleyAlignment::Justify,
     };
     layout.set_alignment(alignment, AlignmentOptions::default());
-    layout.break_all_lines(Some(width as f32));
+    layout.break_all_lines(Some(input.width as f32));
     layout
+}
+
+/// One line of a cached paragraph, placed with its layout top at zero and
+/// its text range relative to the text that was broken.
+#[derive(Clone, Debug)]
+struct BrokenLine {
+    line: PlacedLine,
+    /// Bottom of the line box, in points from the layout top.
+    block_bottom: f64,
+}
+
+#[derive(Debug)]
+pub(crate) struct Broken {
+    lines: Vec<BrokenLine>,
+    height: f64,
+}
+
+/// Broken paragraphs keyed by everything that decides their breaks.
+#[derive(Default)]
+pub struct BreakCache {
+    entries: HashMap<u64, Arc<Broken>>,
+    faces: HashMap<u64, Arc<FontFace>>,
+    pub(crate) hits: usize,
+    pub(crate) misses: usize,
+}
+
+impl BreakCache {
+    /// Above this many paragraphs the cache starts again, to bound memory.
+    const LIMIT: usize = 20_000;
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.faces.clear();
+    }
+
+    /// How many paragraph breaks were reused and how many were computed.
+    pub fn statistics(&self) -> (usize, usize) {
+        (self.hits, self.misses)
+    }
+}
+
+fn hash_style(style: &ParagraphStyle, state: &mut impl Hasher) {
+    style.latin_font.hash(state);
+    style.korean_font.hash(state);
+    for value in [
+        style.korean_scale,
+        style.size,
+        style.leading,
+        style.tracking,
+        style.space_before,
+        style.space_after,
+        style.first_line_indent,
+    ] {
+        value.to_bits().hash(state);
+    }
+    (style.alignment as u8).hash(state);
+    (style.korean_break as u8).hash(state);
+}
+
+fn hash_input(input: &BreakInput<'_>) -> u64 {
+    let mut state = std::collections::hash_map::DefaultHasher::new();
+    input.text.hash(&mut state);
+    hash_style(input.style, &mut state);
+    for (range, character) in input.spans {
+        range.hash(&mut state);
+        character.font_style.map(|slant| slant as u8).hash(&mut state);
+        character.font_weight.hash(&mut state);
+        character.underline.hash(&mut state);
+    }
+    input.width.to_bits().hash(&mut state);
+    input.first_line_indent.to_bits().hash(&mut state);
+    input.underline.hash(&mut state);
+    state.finish()
+}
+
+/// [`break_lines`], through the cache.
+fn break_cached(fonts: &mut Fonts, input: &BreakInput<'_>) -> Arc<Broken> {
+    let key = hash_input(input);
+    if let Some(found) = fonts.cache.entries.get(&key) {
+        fonts.cache.hits += 1;
+        return found.clone();
+    }
+    fonts.cache.misses += 1;
+    let layout = break_lines(fonts, input);
+    let cache = &mut fonts.cache;
+    let lines = layout
+        .lines()
+        .map(|line| BrokenLine {
+            block_bottom: line.metrics().block_max_coord as f64,
+            line: place_line(&line, 0.0, input.text, &mut cache.faces),
+        })
+        .collect();
+    let broken = Arc::new(Broken {
+        lines,
+        height: layout.height() as f64,
+    });
+    if cache.entries.len() >= BreakCache::LIMIT {
+        cache.entries.clear();
+    }
+    cache.entries.insert(key, broken.clone());
+    broken
+}
+
+/// The character-style spans of a paragraph, with byte ranges in its text.
+pub fn paragraph_spans<'d>(document: &'d Document, paragraph: &Paragraph) -> Vec<Span<'d>> {
+    let mut spans = Vec::new();
+    let mut offset = 0;
+    for run in &paragraph.runs {
+        let end = offset + run.text.len();
+        if let Some(character) = run
+            .character_style
+            .as_deref()
+            .and_then(|id| document.character_style(id))
+        {
+            if end > offset {
+                spans.push((offset..end, character));
+            }
+        }
+        offset = end;
+    }
+    spans
+}
+
+/// The spans that fall in `text[start..]`, shifted to start at zero.
+fn spans_from<'d>(spans: &[Span<'d>], start: usize) -> Vec<Span<'d>> {
+    spans
+        .iter()
+        .filter(|(range, _)| range.end > start)
+        .map(|(range, character)| (range.start.max(start) - start..range.end - start, *character))
+        .collect()
+}
+
+/// Text being composed by an input method: which paragraph, and the byte
+/// range of the provisional text within it. The story passed to
+/// [`layout_story`] already contains the text.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Underline {
+    pub paragraph: usize,
+    pub range: Range<usize>,
 }
 
 /// Lays out a story through its frames in thread order. When a paragraph does
@@ -226,18 +435,18 @@ pub fn layout_story(
     document: &Document,
     story: &Story,
     frames: &[FrameBox],
+    underline: Option<&Underline>,
 ) -> Result<StoryLayout, Error> {
     let mut result = StoryLayout {
         frames: frames.iter().map(|_| FrameLayout::default()).collect(),
         overflow_characters: 0,
     };
-    let mut faces: HashMap<u64, Arc<FontFace>> = HashMap::new();
     let mut frame_index = 0usize;
     // Points from the top of the current frame.
     let mut cursor = 0.0f64;
     const EPSILON: f64 = 0.01;
 
-    for paragraph in &story.paragraphs {
+    for (paragraph_index, paragraph) in story.paragraphs.iter().enumerate() {
         let style = document.paragraph_style(&paragraph.style)?;
         let text = paragraph.text();
         if frame_index >= frames.len() {
@@ -247,6 +456,10 @@ pub fn layout_story(
         if cursor > 0.0 {
             cursor += mm_to_pt(style.space_before);
         }
+        let spans = paragraph_spans(document, paragraph);
+        let paragraph_underline = underline
+            .filter(|underline| underline.paragraph == paragraph_index)
+            .map(|underline| underline.range.clone());
         let mut start = 0usize;
         let mut indent = mm_to_pt(style.first_line_indent);
 
@@ -257,21 +470,37 @@ pub fn layout_story(
             };
             let frame_height = mm_to_pt(frame.height);
             let layout_top = cursor;
-            let layout = break_lines(fonts, &text[start..], style, mm_to_pt(frame.width), indent);
+            let shifted_spans = spans_from(&spans, start);
+            let broken = break_cached(
+                fonts,
+                &BreakInput {
+                    text: &text[start..],
+                    style,
+                    spans: &shifted_spans,
+                    width: mm_to_pt(frame.width),
+                    first_line_indent: indent,
+                    underline: paragraph_underline
+                        .clone()
+                        .filter(|range| range.end > start)
+                        .map(|range| range.start.max(start) - start..range.end - start),
+                },
+            );
             let mut stopped_at: Option<usize> = None;
-            for line in layout.lines() {
-                let metrics = line.metrics();
-                let bottom = layout_top + metrics.block_max_coord as f64;
+            for broken_line in &broken.lines {
+                let bottom = layout_top + broken_line.block_bottom;
+                // A line that does not fit moves to the next frame; each move
+                // advances the frame, so a too-short frame cannot loop.
                 if bottom > frame_height + EPSILON {
-                    stopped_at = Some(start + line.text_range().start);
+                    stopped_at = Some(start + broken_line.line.text_range.start);
                     break;
                 }
-                let placed = place_line(&line, layout_top, &text[start..], &mut faces);
-                result.frames[frame_index].lines.push(placed);
+                result.frames[frame_index]
+                    .lines
+                    .push(broken_line.line.moved(layout_top, paragraph_index, start));
             }
             match stopped_at {
                 None => {
-                    cursor = layout_top + layout.height() as f64 + mm_to_pt(style.space_after);
+                    cursor = layout_top + broken.height + mm_to_pt(style.space_after);
                     break;
                 }
                 Some(resume_at) => {
@@ -373,6 +602,7 @@ fn place_line(
             size: run.font_size() as f64,
             color: glyph_run.style().brush,
             text: run_text,
+            text_offset: run_text_range.start,
             glyphs,
         });
     }
@@ -380,6 +610,10 @@ fn place_line(
         top: layout_top + metrics.block_min_coord as f64,
         baseline: layout_top + metrics.baseline as f64,
         bottom: layout_top + metrics.block_max_coord as f64,
+        paragraph: 0,
+        text_range: line.text_range(),
+        // Parley's offset already holds the alignment shift and the indent.
+        x_start: metrics.offset as f64,
         runs,
         decorations,
     }
@@ -426,5 +660,18 @@ mod tests {
         let ranges = script_ranges("...");
         assert_eq!(ranges, vec![(0..3, Script::Latin)]);
         assert!(script_ranges("").is_empty());
+    }
+
+    #[test]
+    fn spans_are_shifted_to_the_remainder() {
+        let italic = CharacterStyle {
+            id: "i".to_owned(),
+            font_style: Some(FontSlant::Italic),
+            font_weight: None,
+            underline: false,
+        };
+        let spans = vec![(2..6, &italic), (10..12, &italic)];
+        let shifted = spans_from(&spans, 4);
+        assert_eq!(shifted.iter().map(|(range, _)| range.clone()).collect::<Vec<_>>(), vec![0..2, 6..8]);
     }
 }

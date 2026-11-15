@@ -42,8 +42,10 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
         );
     }
 
-    let oversize_sheet = settings.sheet.width > 2.0 * size.width + 0.5
-        || settings.sheet.height > size.height + 0.5;
+    let oversize_sheet = matches!(
+        crate::impose::sheet_mode(document, settings.sheet),
+        Ok(crate::impose::SheetMode::Oversize)
+    );
     if oversize_sheet && settings.bleed > 0.0 {
         let b = settings.bleed;
         let _ = write!(

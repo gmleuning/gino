@@ -150,3 +150,66 @@ pub fn spike_document(families: &SpikeFamilies) -> Document {
         }],
     }
 }
+
+/// A test document for checking a fold on paper: every page shows its number
+/// large, the word "top" at its top edge, and a thin border just inside the
+/// trim. Printed imposed, cut and folded, the pages must read 1 to n, upright.
+pub fn fold_test_document(families: &SpikeFamilies, fold: Fold, pages: u32) -> Result<Document, crate::Error> {
+    let request = crate::presets::NewDocument {
+        fold,
+        custom_trim: None,
+        page_count: pages,
+        sheet: None,
+        margins: crate::presets::default_margins(fold),
+        columns: Columns { count: 1, gutter: 5.0 },
+        latin_font: families.latin.clone(),
+        korean_font: families.korean.clone(),
+        size: 10.0,
+        leading: 12.0,
+    };
+    let mut document = crate::presets::new_document(&request)?;
+    let trim = document.document.trim;
+    let number_size = (trim.height * 0.35 / 25.4 * 72.0).min(160.0);
+    let base = document.paragraph_styles[0].clone();
+    document.paragraph_styles.push(ParagraphStyle {
+        id: "number".to_owned(),
+        size: number_size,
+        leading: number_size * 1.1,
+        alignment: Alignment::Center,
+        ..base.clone()
+    });
+    document.paragraph_styles.push(ParagraphStyle {
+        id: "top".to_owned(),
+        size: 9.0,
+        leading: 11.0,
+        alignment: Alignment::Center,
+        ..base
+    });
+    let count = document.pages.len();
+    for (index, page) in document.pages.iter_mut().enumerate() {
+        let number = index + 1;
+        let number_story = format!("number_{number}");
+        let top_story = format!("top_{number}");
+        let number_height = number_size / 72.0 * 25.4 * 1.2;
+        page.frames.push(Frame::rectangle(&format!("border_{number}"), 2.0, 2.0, trim.width - 4.0, trim.height - 4.0, 0.2, 0.6));
+        page.frames.push(Frame::text(&format!("top_{number}"), 4.0, 4.0, trim.width - 8.0, 6.0, &top_story, 0));
+        page.frames.push(Frame::text(
+            &format!("number_{number}"),
+            4.0,
+            (trim.height - number_height) / 2.0,
+            trim.width - 8.0,
+            number_height,
+            &number_story,
+            0,
+        ));
+        document.stories.push(Story {
+            id: top_story,
+            paragraphs: vec![Paragraph::plain("top", &format!("top · 위 · page {number} of {count}"))],
+        });
+        document.stories.push(Story {
+            id: number_story,
+            paragraphs: vec![Paragraph::plain("number", &number.to_string())],
+        });
+    }
+    Ok(document)
+}

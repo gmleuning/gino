@@ -260,6 +260,12 @@ pub struct CharacterStyle {
     /// Weight from 100 to 900, as on the web.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_weight: Option<u16>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub underline: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -500,6 +506,7 @@ mod tests {
                 id: "emphasis".to_owned(),
                 font_style: Some(FontSlant::Italic),
                 font_weight: None,
+                underline: false,
             }],
             stories: vec![Story {
                 id: "s1".to_owned(),

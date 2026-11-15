@@ -12,8 +12,10 @@ pub mod fonts;
 pub mod guides;
 pub mod hit;
 pub mod images;
+pub mod impose;
 pub mod layout;
 pub mod model;
+pub mod presets;
 pub mod render_pdf;
 pub mod render_svg;
 pub mod scene;
@@ -21,6 +23,7 @@ pub mod session;
 pub mod snap;
 pub mod spike;
 pub mod spreads;
+pub mod text;
 pub mod units;
 pub mod zine;
 

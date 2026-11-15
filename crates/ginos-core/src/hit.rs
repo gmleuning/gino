@@ -1,13 +1,29 @@
 //! Canvas coordinates to frames and resize handles. Text positions within a
-//! story come with milestone 3.
+//! story are in [`crate::text`].
 
 use serde::{Deserialize, Serialize};
 
 use crate::model::{Frame, Page, Rect};
 
+/// Half the thickness a hairline frame (a rule) is given for hit testing, in millimetres.
+const THIN_FRAME_REACH: f64 = 1.0;
+
 /// The topmost frame under a point (frames later in the list are on top).
+/// Rules, which may be zero millimetres high or wide, are reachable within a
+/// millimetre of their line.
 pub fn frame_at(page: &Page, x: f64, y: f64) -> Option<&Frame> {
-    page.frames.iter().rev().find(|frame| frame.rect().contains(x, y))
+    page.frames.iter().rev().find(|frame| {
+        let mut rect = frame.rect();
+        if rect.w < 2.0 * THIN_FRAME_REACH {
+            rect.x -= THIN_FRAME_REACH;
+            rect.w += 2.0 * THIN_FRAME_REACH;
+        }
+        if rect.h < 2.0 * THIN_FRAME_REACH {
+            rect.y -= THIN_FRAME_REACH;
+            rect.h += 2.0 * THIN_FRAME_REACH;
+        }
+        rect.contains(x, y)
+    })
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

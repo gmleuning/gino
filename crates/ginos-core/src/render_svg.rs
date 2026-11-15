@@ -33,21 +33,48 @@ pub fn page_to_svg(page: &Page) -> String {
 /// Renders one frame to an SVG `<g>` fragment in page millimetres. Ids inside
 /// are prefixed with the frame id so fragments can share one document.
 pub fn frame_to_svg(frame: &FrameScene) -> String {
-    let prefix = id_safe(&frame.id);
-    let mut defs = String::new();
+    let mut writer = Writer {
+        prefix: id_safe(&frame.id),
+        defs: String::new(),
+        known: HashMap::new(),
+        unit_cache: HashMap::new(),
+        clip_count: 0,
+    };
     let mut body = String::new();
-    let mut known: HashMap<(u64, u32), Option<f64>> = HashMap::new();
-    let mut unit_cache: HashMap<u64, f64> = HashMap::new();
-    let mut clip_count = 0usize;
+    writer.items(&frame.items, &mut body);
+    format!("<g data-frame=\"{}\"><defs>{}</defs>{body}</g>", writer.prefix, writer.defs)
+}
 
-    for item in &frame.items {
+struct Writer {
+    prefix: String,
+    defs: String,
+    known: HashMap<(u64, u32), Option<f64>>,
+    unit_cache: HashMap<u64, f64>,
+    clip_count: usize,
+}
+
+impl Writer {
+    fn clip_id(&mut self) -> String {
+        self.clip_count += 1;
+        format!("{}-clip{}", self.prefix, self.clip_count)
+    }
+
+    fn items(&mut self, items: &[Item], body: &mut String) {
+        for item in items {
+            self.item(item, body);
+        }
+    }
+
+    fn item(&mut self, item: &Item, body: &mut String) {
+        let prefix = self.prefix.clone();
         match item {
             Item::Text(text) => {
                 let _ = write!(body, "<g fill=\"{}\">", color(text.color));
                 for glyph in &text.glyphs {
                     let key = (text.font.id, glyph.id);
-                    let units_per_em = *known.entry(key).or_insert_with(|| {
-                        define_glyph(&mut defs, &prefix, &text.font, glyph.id, &mut unit_cache)
+                    let (defs, unit_cache) = (&mut self.defs, &mut self.unit_cache);
+                    let units_per_em = *self.known.entry(key).or_insert_with(|| {
+                        define_glyph(defs, &prefix, &text.font, glyph.id, unit_cache)
                     });
                     let Some(units_per_em) = units_per_em else {
                         continue;
@@ -99,11 +126,41 @@ pub fn frame_to_svg(frame: &FrameScene) -> String {
                     num(rule.stroke.width)
                 );
             }
-            Item::Image(image) => {
-                clip_count += 1;
-                let clip_id = format!("{prefix}-clip{clip_count}");
+            Item::Group(group) => {
+                let t = group.transform;
                 let _ = write!(
-                    defs,
+                    body,
+                    "<g transform=\"matrix({} {} {} {} {} {})\">",
+                    num6(t.a),
+                    num6(t.b),
+                    num6(t.c),
+                    num6(t.d),
+                    num(t.e),
+                    num(t.f)
+                );
+                match group.clip {
+                    Some(clip) => {
+                        let clip_id = self.clip_id();
+                        let _ = write!(
+                            self.defs,
+                            "<clipPath id=\"{clip_id}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath>",
+                            num(clip.x),
+                            num(clip.y),
+                            num(clip.w),
+                            num(clip.h)
+                        );
+                        let _ = write!(body, "<g clip-path=\"url(#{clip_id})\">");
+                        self.items(&group.items, body);
+                        body.push_str("</g>");
+                    }
+                    None => self.items(&group.items, body),
+                }
+                body.push_str("</g>");
+            }
+            Item::Image(image) => {
+                let clip_id = self.clip_id();
+                let _ = write!(
+                    self.defs,
                     "<clipPath id=\"{clip_id}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath>",
                     num(image.clip.x),
                     num(image.clip.y),
@@ -122,8 +179,6 @@ pub fn frame_to_svg(frame: &FrameScene) -> String {
             }
         }
     }
-
-    format!("<g data-frame=\"{prefix}\"><defs>{defs}</defs>{body}</g>")
 }
 
 /// Adds the glyph's outline to `defs` and returns the font's units per em, or

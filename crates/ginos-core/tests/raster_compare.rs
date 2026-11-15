@@ -169,13 +169,36 @@ fn svg_and_pdf_of_the_spike_match_pixel_for_pixel() {
 
     let svg = page_to_svg(page);
     let pdf = scene_to_pdf(&composition.scene).expect("the PDF renders");
+    assert_rasters_match("spike", &svg, page.width, page.height, pdf, CENTRE_TOLERANCE);
+}
 
-    let from_svg = rasterise_svg(&svg, page.width, page.height);
+/// An imposed eight-page fold sheet: whole pages placed through transforms,
+/// the top row turned upside down, each clipped to its panel.
+#[test]
+fn svg_and_pdf_of_an_imposed_sheet_match() {
+    let (mut fonts, families) = common::fixture_fonts();
+    let document = ginos_core::spike::fold_test_document(&families, ginos_core::model::Fold::EightPageFold, 8)
+        .expect("the fold test document builds");
+    let mut images = ginos_core::images::ImageCache::new(std::path::Path::new("."));
+    let composition = compose(&mut fonts, &document, &mut images).expect("the fold test composes");
+    assert!(composition.overflows.is_empty(), "{:?}", composition.overflows);
+    let scene = ginos_core::impose::imposed_scene(&document, &composition, document.document.sheet).unwrap();
+    assert_eq!(scene.pages.len(), 1);
+    let page = &scene.pages[0];
+    let svg = page_to_svg(page);
+    let pdf = scene_to_pdf(&scene).expect("the PDF renders");
+    // This page is mostly thin grey panel borders, which hayro paints about
+    // 6 % darker than resvg; that alone moves the ink centre by under a pixel.
+    assert_rasters_match("eight-page-fold", &svg, page.width, page.height, pdf, 1.0);
+}
+
+fn assert_rasters_match(name: &str, svg: &str, width_mm: f64, height_mm: f64, pdf: Vec<u8>, centre_tolerance: f64) {
+    let from_svg = rasterise_svg(svg, width_mm, height_mm);
     let from_pdf = rasterise_pdf(pdf, 0);
 
     let folder = common::output_folder("raster-compare");
-    from_svg.save_png(&folder.join("spike-from-svg.png"));
-    from_pdf.save_png(&folder.join("spike-from-pdf.png"));
+    from_svg.save_png(&folder.join(format!("{name}-from-svg.png")));
+    from_pdf.save_png(&folder.join(format!("{name}-from-pdf.png")));
 
     assert!(
         from_svg.width.abs_diff(from_pdf.width) <= 1 && from_svg.height.abs_diff(from_pdf.height) <= 1,
@@ -221,7 +244,7 @@ fn svg_and_pdf_of_the_spike_match_pixel_for_pixel() {
         INK_TOLERANCE * 100.0
     );
     assert!(
-        centre_distance <= CENTRE_TOLERANCE,
-        "ink centres are {centre_distance:.3} px apart, more than {CENTRE_TOLERANCE} px"
+        centre_distance <= centre_tolerance,
+        "ink centres are {centre_distance:.3} px apart, more than {centre_tolerance} px"
     );
 }

@@ -30,7 +30,7 @@ fn word_mode_keeps_a_spaceless_korean_phrase_on_one_line() {
         .iter()
         .map(|id| {
             let story = document.story(id).unwrap();
-            let layout = layout_story(&mut fonts, &document, story, &frames).unwrap();
+            let layout = layout_story(&mut fonts, &document, story, &frames, None).unwrap();
             assert_eq!(layout.overflow_characters, 0);
             line_texts(&layout.frames[0])
         })
@@ -60,7 +60,7 @@ fn korean_runs_use_the_korean_font_and_scale() {
         width: 100.0,
         height: 300.0,
     }];
-    let layout = layout_story(&mut fonts, &document, story, &frames).unwrap();
+    let layout = layout_story(&mut fonts, &document, story, &frames, None).unwrap();
 
     let mut latin_faces = std::collections::HashSet::new();
     let mut korean_faces = std::collections::HashSet::new();
@@ -97,7 +97,7 @@ fn a_story_threads_across_frames_of_different_widths() {
             height: 85.0,
         },
     ];
-    let layout = layout_story(&mut fonts, &document, story, &frames).unwrap();
+    let layout = layout_story(&mut fonts, &document, story, &frames, None).unwrap();
     assert_eq!(layout.overflow_characters, 0);
     let a = &layout.frames[0];
     let b = &layout.frames[1];
@@ -141,7 +141,7 @@ fn text_that_does_not_fit_is_reported_as_overflow() {
         width: 60.0,
         height: 30.0,
     }];
-    let layout = layout_story(&mut fonts, &document, story, &frames).unwrap();
+    let layout = layout_story(&mut fonts, &document, story, &frames, None).unwrap();
     let total: usize = story.paragraphs.iter().map(|p| p.text().chars().count()).sum();
     let placed: usize = line_texts(&layout.frames[0]).concat().chars().count();
     assert!(layout.overflow_characters > 0);
@@ -156,7 +156,7 @@ fn text_that_does_not_fit_is_reported_as_overflow() {
         id: "short".to_owned(),
         paragraphs: vec![Paragraph::plain("thread", "한 줄. One line.")],
     };
-    let layout = layout_story(&mut fonts, &document, &short_story, &tiny).unwrap();
+    let layout = layout_story(&mut fonts, &document, &short_story, &tiny, None).unwrap();
     assert!(layout.frames[0].lines.is_empty());
     assert_eq!(layout.overflow_characters, "한 줄. One line.".chars().count());
 }

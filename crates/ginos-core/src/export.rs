@@ -1,4 +1,4 @@
-//! PDF export. Reader spreads now; imposed sheets come with milestone 3.
+//! PDF export: reader spreads, and sheets imposed for printing.
 
 use std::path::Path;
 
@@ -6,7 +6,8 @@ use crate::compose::{compose, Composition};
 use crate::error::Error;
 use crate::fonts::Fonts;
 use crate::images::ImageCache;
-use crate::model::Document;
+use crate::impose::imposed_scene;
+use crate::model::{Document, Size};
 use crate::render_pdf::scene_to_pdf;
 use crate::scene::Scene;
 use crate::spreads::{reader_spreads, spread_page};
@@ -31,6 +32,20 @@ pub fn reader_pdf(
 ) -> Result<(Vec<u8>, Composition), Error> {
     let composition = compose(fonts, document, images)?;
     let scene = reader_spread_scene(document, &composition);
+    let pdf = scene_to_pdf(&scene)?;
+    Ok((pdf, composition))
+}
+
+/// Renders the document imposed for printing: one PDF page per sheet side,
+/// on the document's sheet or on `sheet` when given.
+pub fn imposed_pdf(
+    fonts: &mut Fonts,
+    images: &mut ImageCache,
+    document: &Document,
+    sheet: Option<Size>,
+) -> Result<(Vec<u8>, Composition), Error> {
+    let composition = compose(fonts, document, images)?;
+    let scene = imposed_scene(document, &composition, sheet.unwrap_or(document.document.sheet))?;
     let pdf = scene_to_pdf(&scene)?;
     Ok((pdf, composition))
 }
