@@ -300,7 +300,7 @@
   style:grid-template-columns={`${app.showPages ? "180px " : ""}1fr${app.showPanel ? " auto" : ""}`}
 >
   <div class="topbar">
-    <MenuBar {menus} />
+    <div class="topbar-left"><MenuBar {menus} /></div>
     {#if app.view}
       <div class="tools" role="toolbar" aria-label="Tools">
         {#each tools as entry}
@@ -313,7 +313,6 @@
         {/each}
       </div>
     {/if}
-    <span class="spacer"></span>
   </div>
 
   {#if app.showPages}

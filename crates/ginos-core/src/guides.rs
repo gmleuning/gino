@@ -14,8 +14,19 @@ const DOTTED: &str = "stroke-dasharray=\"0.5 3\" stroke-linecap=\"round\"";
 const MARGIN_COLOUR: &str = GUIDE_GREY;
 const COLUMN_COLOUR: &str = GUIDE_GREY;
 const PRINTER_COLOUR: &str = GUIDE_GREY;
-const BLEED_COLOUR: &str = GUIDE_GREY;
+/// Bleed is the one guide in colour, light red, because art must reach it.
+const BLEED_COLOUR: &str = "#f2a7a7";
 const SPINE_COLOUR: &str = GUIDE_GREY;
+
+/// The area a page's art may cover, in page millimetres: the page itself,
+/// or with `bleed` the page plus the bleed on its outer edges (top, bottom
+/// and the side away from the spine).
+pub fn page_bounds(document: &Document, page_index: usize, bleed: bool) -> crate::model::Rect {
+    let size = document.page_size();
+    let b = if bleed { document.document.bleed.max(0.0) } else { 0.0 };
+    let x = if Document::is_left_page(page_index) { -b } else { 0.0 };
+    crate::model::Rect::new(x, -b, size.width + b, size.height + 2.0 * b)
+}
 
 /// An SVG fragment in page millimetres for one page's guides.
 pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
@@ -50,17 +61,22 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
         crate::impose::sheet_mode(document, settings.sheet),
         Ok(crate::impose::SheetMode::Oversize)
     );
-    if oversize_sheet && settings.bleed > 0.0 {
-        let b = settings.bleed;
+    if settings.bleed > 0.0 {
+        // Around the outer edges only: the spine edge meets the facing page.
+        let bounds = page_bounds(document, page_index, true);
+        let spine_x = if Document::is_left_page(page_index) { size.width } else { 0.0 };
+        let outer_x = if Document::is_left_page(page_index) { bounds.x } else { bounds.x + bounds.w };
         let _ = write!(
             svg,
-            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"bleed\" stroke=\"{BLEED_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
-            n(-b),
-            n(-b),
-            n(size.width + 2.0 * b),
-            n(size.height + 2.0 * b)
+            "<path d=\"M {} {} H {} V {} H {}\" class=\"bleed\" stroke=\"{BLEED_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
+            n(spine_x),
+            n(bounds.y),
+            n(outer_x),
+            n(bounds.y + bounds.h),
+            n(spine_x)
         );
-    } else if settings.printer_margin > 0.0 {
+    }
+    if !oversize_sheet && settings.printer_margin > 0.0 {
         // Same-size sheet: what a home printer will clip, on the outer edges.
         // The spine edge is in the middle of the sheet and is not clipped.
         let m = settings.printer_margin;

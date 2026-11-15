@@ -249,6 +249,7 @@ export const api = {
     invoke<Update>("set_frame_rect", { page, frameId, rect }),
   setFrameAppearance: (page: number, frameId: string, strokeWidth: number, grey: number, filled: boolean) =>
     invoke<Update>("set_frame_appearance", { page, frameId, strokeWidth, grey, filled }),
+  cropFrameTo: (page: number, frameId: string, bleed: boolean) => invoke<Update>("crop_frame_to", { page, frameId, bleed }),
   nudge: (dx: number, dy: number) => invoke<Update>("nudge", { dx, dy }),
   deleteFrame: () => invoke<Update>("delete_frame"),
   arrange: (arrange: Arrange) => invoke<Update>("arrange", { arrange }),

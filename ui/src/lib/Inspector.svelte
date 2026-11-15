@@ -158,6 +158,15 @@
         <button onclick={() => crop(0, 0, 1.1)} title="Larger">+</button>
       </div>
     {/if}
+    <div class="row">
+      <span style="font-size: 11px; color: var(--muted); width: 100%;">Frame past the edge: trim it, the picture stays put</span>
+      <button onclick={() => run(() => api.cropFrameTo(selection.page, selection.frame_id, false))} title="Shrink the frame to the page edge">Crop to page</button>
+      <button
+        onclick={() => run(() => api.cropFrameTo(selection.page, selection.frame_id, true))}
+        disabled={!app.view?.settings.bleed}
+        title={app.view?.settings.bleed ? "Shrink the frame to the bleed line" : "This zine has no bleed"}>Crop to bleed</button
+      >
+    </div>
   {:else if selection.kind === "text"}
     <div class="path">
       Story "{selection.story ?? "—"}", frame {selection.thread_position + 1} of {selection.thread_length}

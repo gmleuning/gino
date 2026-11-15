@@ -215,3 +215,34 @@ fn a_print_resolution_reduces_fine_pictures_only() {
     assert!(info.pixel_width > 0 && info.pixel_height > 0);
     assert!(info.thumbnail.starts_with("data:image/png;base64,"));
 }
+
+#[test]
+fn cropping_to_the_bleed_or_page_keeps_the_picture_in_place() {
+    let mut session = open_sample();
+    session.view().unwrap();
+    let width = session.document().page_size().width;
+    // Page index 2 is a right page: its bleed is on the right, top and bottom.
+    session.set_frame_rect(2, "picture", Rect::new(100.0, -10.0, 123.0, 60.0)).unwrap();
+    let fill = session.zine.document.frame(2, "picture").unwrap().clone();
+    session.crop_frame_to(2, "picture", true).unwrap();
+    let frame = session.zine.document.frame(2, "picture").unwrap();
+    let rect = frame.rect();
+    assert!((rect.x - 100.0).abs() < 1e-9);
+    assert!((rect.y + 3.0).abs() < 1e-9);
+    assert!((rect.x + rect.w - (width + 3.0)).abs() < 1e-9);
+    assert!((rect.y + rect.h - 50.0).abs() < 1e-9);
+    assert_eq!(frame.fit, ImageFit::Manual);
+    let crop = frame.crop.unwrap();
+    // Fill of 1200x800 in 123x60: scale 0.1025, offset (0, -11) from the old frame at y -10.
+    assert!((crop.scale - 0.1025).abs() < 1e-9);
+    assert!((crop.offset_x - 0.0).abs() < 1e-9);
+    assert!((crop.offset_y - (-10.0 - 11.0 + 3.0)).abs() < 1e-9);
+    session.crop_frame_to(2, "picture", false).unwrap();
+    let rect = session.zine.document.frame(2, "picture").unwrap().rect();
+    assert!((rect.y - 0.0).abs() < 1e-9);
+    assert!((rect.x + rect.w - width).abs() < 1e-9);
+    assert!(session.crop_frame_to(2, "picture", false).is_err(), "nothing left to crop");
+    session.undo().unwrap();
+    session.undo().unwrap();
+    assert_eq!(session.zine.document.frame(2, "picture").unwrap(), &fill);
+}

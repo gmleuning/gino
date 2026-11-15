@@ -22,7 +22,7 @@ use crate::hit::{frame_at, handle_at, Handle};
 use crate::images::{crop_for_fit, ImageCache};
 use crate::impose::{sheet_mode, SheetMode};
 use crate::model::{
-    CharacterStyle, Document, Frame, FrameKind, ImageFit, Page, Paragraph, ParagraphStyle, Rect,
+    CharacterStyle, Document, Frame, FrameKind, ImageCrop, ImageFit, Page, Paragraph, ParagraphStyle, Rect,
     Settings, Size, Story,
 };
 use crate::presets::{new_document, NewDocument};
@@ -856,6 +856,44 @@ impl Session {
             before,
             after: before.translated(dx, dy).rounded(),
         })
+    }
+
+    /// Shrinks a frame that reaches past the page (or, with `bleed`, past the
+    /// bleed) to stop there. An image keeps its size and position on the
+    /// page: the frame becomes a manual crop of the same picture.
+    pub fn crop_frame_to(&mut self, page: usize, frame_id: &str, bleed: bool) -> Result<Update, Error> {
+        let before = self.zine.document.frame(page, frame_id)?.clone();
+        let bounds = crate::guides::page_bounds(&self.zine.document, page, bleed);
+        let rect = before.rect();
+        let x0 = rect.x.max(bounds.x);
+        let y0 = rect.y.max(bounds.y);
+        let x1 = (rect.x + rect.w).min(bounds.x + bounds.w);
+        let y1 = (rect.y + rect.h).min(bounds.y + bounds.h);
+        let edge = if bleed { "bleed" } else { "page" };
+        if x1 - x0 < 1.0 || y1 - y0 < 1.0 {
+            return Err(Error::Invalid(format!("the frame lies outside the {edge}")));
+        }
+        let cropped = Rect::new(x0, y0, x1 - x0, y1 - y0);
+        if (cropped.x - rect.x).abs() < 1e-6
+            && (cropped.y - rect.y).abs() < 1e-6
+            && (cropped.w - rect.w).abs() < 1e-6
+            && (cropped.h - rect.h).abs() < 1e-6
+        {
+            return Err(Error::Invalid(format!("the frame already ends at or inside the {edge}")));
+        }
+        let mut after = before.clone();
+        after.set_rect(cropped);
+        if let Some(stored) = before.image.clone() {
+            let image = self.images.load(&stored)?;
+            let crop = crop_for_fit(&before, &image, before.fit);
+            after.fit = ImageFit::Manual;
+            after.crop = Some(ImageCrop {
+                offset_x: rect.x + crop.offset_x - cropped.x,
+                offset_y: rect.y + crop.offset_y - cropped.y,
+                scale: crop.scale,
+            });
+        }
+        self.apply(Command::SetFrame { page, before, after })
     }
 
     /// Stroke and fill of a rectangle or rule.

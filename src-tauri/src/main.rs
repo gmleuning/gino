@@ -132,6 +132,11 @@ fn set_frame_appearance(
 }
 
 #[tauri::command]
+fn crop_frame_to(page: usize, frame_id: String, bleed: bool, state: State<'_, AppState>) -> CommandResult<Update> {
+    with_session(&state, |session| session.crop_frame_to(page, &frame_id, bleed))
+}
+
+#[tauri::command]
 fn nudge(dx: f64, dy: f64, state: State<'_, AppState>) -> CommandResult<Update> {
     with_session(&state, |session| session.nudge(dx, dy))
 }
@@ -427,6 +432,7 @@ fn main() {
             select_frame,
             set_frame_rect,
             set_frame_appearance,
+            crop_frame_to,
             nudge,
             delete_frame,
             arrange,

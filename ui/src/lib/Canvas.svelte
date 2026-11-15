@@ -29,6 +29,8 @@
   let svgElement: SVGSVGElement | undefined = $state();
   let textarea: HTMLTextAreaElement | undefined = $state();
   let dragging = $state(false);
+  /** The pointer is over the selected frame (or its handles). */
+  let hovering = $state(false);
   let moveInFlight = false;
   let pendingMove: [number, number] | null = null;
   let composing = false;
@@ -89,6 +91,23 @@
   }
 
   const selectionOffset = $derived(app.selection ? offsetOf(app.selection.page) : null);
+  /** The selected frame's rectangle in spread millimetres, following a drag live. */
+  const selectedRect = $derived.by(() => {
+    const selection = app.selection;
+    if (!selection || selectionOffset === null) return null;
+    const rect = app.frames.get(frameKey(selection.page, selection.frame_id))?.rect ?? selection.rect;
+    return { x: selectionOffset + rect.x, y: rect.y, w: rect.w, h: rect.h };
+  });
+  /** Resize handles show while the pointer is on the selected frame, and while dragging it. */
+  const handles = $derived.by(() => {
+    const r = selectedRect;
+    if (!r || app.text || app.tool !== "select" || !(hovering || dragging)) return [];
+    const xs = [r.x, r.x + r.w / 2, r.x + r.w];
+    const ys = [r.y, r.y + r.h / 2, r.y + r.h];
+    const points: [number, number][] = [];
+    for (const y of ys) for (const x of xs) if (x !== xs[1] || y !== ys[1]) points.push([x, y]);
+    return points;
+  });
   const caret = $derived(app.text?.caret ?? null);
   const caretOffset = $derived(caret ? offsetOf(caret.page) : null);
 
@@ -162,9 +181,15 @@
   }
 
   function onPointerMove(event: PointerEvent) {
-    if (!dragging) return;
     const spreadPoint = toSpread(event);
     if (!spreadPoint) return;
+    if (!dragging) {
+      const r = selectedRect;
+      const slack = handleMm;
+      const [x, y] = spreadPoint;
+      hovering = !!r && x >= r.x - slack && x <= r.x + r.w + slack && y >= r.y - slack && y <= r.y + r.h + slack;
+      return;
+    }
     const local = toPage(...spreadPoint);
     if (!local) return;
     pendingMove = [local.x, local.y];
@@ -191,6 +216,19 @@
     app.snap = null;
     // Drawing tools make one frame, then return to selecting.
     app.tool = "select";
+    focus();
+  }
+
+  /** A press on the desk around the spread deselects, like Esc. */
+  async function onDeskPointerDown(event: PointerEvent) {
+    if (event.button !== 0 || (svgElement && svgElement.contains(event.target as Node))) return;
+    if (event.target instanceof HTMLTextAreaElement) return;
+    if (app.threading) {
+      app.threading = false;
+      app.say(null);
+    }
+    if (app.text) await enqueue(api.endEditing);
+    if (app.selection) await enqueue(() => api.selectFrame(app.selection!.page, null));
     focus();
   }
 
@@ -430,6 +468,7 @@
   bind:this={wrapper}
   onkeydown={onKeyDown}
   onwheel={onWheel}
+  onpointerdown={onDeskPointerDown}
 >
   {#if spread && app.view}
     <div class="sheet" style:width={`${pxWidth}px`} style:height={`${pxHeight}px`}>
@@ -448,6 +487,7 @@
         onpointermove={onPointerMove}
         onpointerup={onPointerUp}
         onpointercancel={onPointerUp}
+        onpointerleave={() => (hovering = false)}
       >
         {#each spread.pages as [pageIndex, dx]}
           {@const page = app.view.pages[pageIndex]}
@@ -464,14 +504,17 @@
             {#if app.showOutlines}
               {#each page.frame_ids as frameId (frameId)}
                 {@const patch = app.frames.get(frameKey(pageIndex, frameId))}
+                {@const selected = app.selection?.page === pageIndex && app.selection.frame_id === frameId}
                 {#if patch && patch.kind !== "rule" && patch.kind !== "page_number"}
                   <rect
                     x={patch.rect.x}
                     y={patch.rect.y}
                     width={patch.rect.w}
                     height={patch.rect.h}
-                    fill="none"
-                    stroke="#c9c9c9"
+                    fill={selected ? "#e0524a" : "none"}
+                    fill-opacity={selected ? 0.08 : undefined}
+                    stroke={selected ? "#e58a84" : "#c9c9c9"}
+                    pointer-events="none"
                     stroke-dasharray="1 3"
                     stroke-linecap="round"
                     stroke-width="1"
@@ -494,6 +537,37 @@
               {/if}
             {/if}
           </g>
+        {/each}
+
+        {#if selectedRect && dragging && !app.text}
+          <!-- The frame being moved or resized, so it can be seen against the page. -->
+          <rect
+            x={selectedRect.x}
+            y={selectedRect.y}
+            width={selectedRect.w}
+            height={selectedRect.h}
+            fill="none"
+            stroke="#a8a8a8"
+            stroke-dasharray="1 3"
+            stroke-linecap="round"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+            pointer-events="none"
+          />
+        {/if}
+        {#each handles as [hx, hy]}
+          <rect
+            class="handle"
+            x={hx - handleMm / 2}
+            y={hy - handleMm / 2}
+            width={handleMm}
+            height={handleMm}
+            fill="#fff"
+            stroke="#8a8a8a"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+            pointer-events="none"
+          />
         {/each}
 
         {#if app.showCropMarks}
