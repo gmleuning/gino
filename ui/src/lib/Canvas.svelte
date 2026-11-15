@@ -511,8 +511,7 @@
                     y={patch.rect.y}
                     width={patch.rect.w}
                     height={patch.rect.h}
-                    fill={selected ? "#e0524a" : "none"}
-                    fill-opacity={selected ? 0.08 : undefined}
+                    fill="none"
                     stroke={selected ? "#e58a84" : "#c9c9c9"}
                     pointer-events="none"
                     stroke-dasharray="1 3"
