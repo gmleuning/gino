@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Gino app icon — rounded G (concept B)</title>
+  <defs>
+    <filter id="hand" filterUnits="userSpaceOnUse" x="-200" y="-200" width="2000" height="1000">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="1" seed="5" result="wobble" />
+      <feDisplacementMap in="SourceGraphic" in2="wobble" scale="4" xChannelSelector="R" yChannelSelector="G" result="drawn" />
+      <feGaussianBlur in="drawn" stdDeviation="0.9" result="soft" />
+      <feColorMatrix in="soft" type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 1 0" result="rim" />
+      <feMerge><feMergeNode in="rim" /><feMergeNode in="drawn" /></feMerge>
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="44" fill="#f4efe3" />
+  <!-- The logotype's G, centred in the square. -->
+  <g filter="url(#hand)" fill="none" stroke="#111" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(52 15) scale(0.44)">
+    <path stroke-width="104" d="M 238 104 C 160 98, 84 150, 66 250 C 50 350, 110 412, 200 414 C 262 415, 284 382, 284 334 L 282 252" />
+  </g>
+</svg>

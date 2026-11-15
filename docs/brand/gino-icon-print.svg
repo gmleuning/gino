@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Gino app icon — script G, 1950s print (concept A)</title>
+  <defs>
+    <filter id="board" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="fine" />
+      <feColorMatrix in="fine" type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.235  0 0 0 0 0.22  0 0 0 0.3 0" result="grain" />
+      <feComposite in="grain" in2="SourceGraphic" operator="in" result="clipped" />
+      <feMerge>
+        <feMergeNode in="SourceGraphic" />
+        <feMergeNode in="clipped" />
+      </feMerge>
+    </filter>
+    <filter id="ink" filterUnits="userSpaceOnUse" x="-100" y="-100" width="900" height="500">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="2" result="edge" />
+      <feDisplacementMap in="SourceGraphic" in2="edge" scale="3" xChannelSelector="R" yChannelSelector="G" result="rough" />
+      <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="7" result="specks" />
+      <feColorMatrix in="specks" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -24 17.5" result="holes" />
+      <feComposite in="rough" in2="holes" operator="in" />
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="44" fill="#22211f" filter="url(#board)" />
+
+  <!-- The logotype's G, drawn larger and a touch heavier so it holds at small sizes. -->
+  <g filter="url(#ink)" fill="none" stroke="#ece3cb" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(6 -10) scale(0.85)">
+    <path stroke-width="22" d="M 196 92 C 186 70, 160 62, 136 70 C 100 82, 78 122, 80 160 C 82 196, 104 214, 132 210 C 160 206, 178 184, 186 160" />
+    <path stroke-width="16" d="M 196 92 C 200 86, 206 86, 208 92" />
+    <path stroke-width="20" d="M 150 160 C 162 156, 176 156, 190 158 C 188 190, 182 226, 166 246 C 152 262, 128 262, 126 246 C 124 230, 150 216, 186 206 C 198 203, 206 200, 212 196" />
+  </g>
+</svg>
