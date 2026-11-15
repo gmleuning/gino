@@ -156,6 +156,7 @@ pub fn spike_document(families: &SpikeFamilies) -> Document {
 /// trim. Printed imposed, cut and folded, the pages must read 1 to n, upright.
 pub fn fold_test_document(families: &SpikeFamilies, fold: Fold, pages: u32) -> Result<Document, crate::Error> {
     let request = crate::presets::NewDocument {
+        starter_frames: false,
         fold,
         custom_trim: None,
         page_count: pages,

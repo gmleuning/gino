@@ -211,6 +211,11 @@ export interface NewDocument {
   korean_font: string;
   size: number;
   leading: number;
+  starter_frames: boolean;
+}
+
+export interface Preferences {
+  starter_frames: boolean;
 }
 
 export interface FoldDefaults {
@@ -274,6 +279,10 @@ export const api = {
   save: () => invoke<Update>("save_document"),
   exportReader: (path: string | null) => invoke<ExportResult>("export_reader", { path }),
   exportImposed: (path: string, sheet: Size | null) => invoke<ExportResult>("export_imposed", { path, sheet }),
+  exportPaged: (path: string) => invoke<ExportResult>("export_paged", { path }),
+  openInDefaultApp: (path: string) => invoke<void>("open_in_default_app", { path }),
+  getPreferences: () => invoke<Preferences>("get_preferences"),
+  setPreferences: (preferences: Preferences) => invoke<void>("set_preferences", { preferences }),
   defaultExportPath: (suffix: string) => invoke<string>("default_export_path", { suffix }),
   fontFamilies: () => invoke<string[]>("font_families"),
 };

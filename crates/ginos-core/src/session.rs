@@ -1628,6 +1628,13 @@ impl Session {
         Ok(composition.overflows)
     }
 
+    /// Writes one PDF page per document page, at the trim size.
+    pub fn export_paged_pdf(&mut self, path: &Path) -> Result<Vec<Overflow>, Error> {
+        let (pdf, composition) = crate::export::paged_pdf(&mut self.fonts, &mut self.images, &self.zine.document)?;
+        write_pdf(path, &pdf)?;
+        Ok(composition.overflows)
+    }
+
     /// Writes the imposed PDF for printing, on the document's sheet or on `sheet`.
     pub fn export_imposed_pdf(&mut self, path: &Path, sheet: Option<Size>) -> Result<Vec<Overflow>, Error> {
         let (pdf, composition) = imposed_pdf(&mut self.fonts, &mut self.images, &self.zine.document, sheet)?;

@@ -23,7 +23,13 @@
   let size = $state(10);
   let leading = $state(14);
   let defaults = $state<{ trim: Size; sheet: Size } | null>(null);
+  let starterFrames = $state(true);
   let busy = $state(false);
+
+  api
+    .getPreferences()
+    .then((preferences) => (starterFrames = preferences.starter_frames))
+    .catch(() => {});
   let error = $state<string | null>(null);
 
   const folds: { value: Fold; label: string }[] = [
@@ -84,6 +90,7 @@
       korean_font: koreanFont,
       size,
       leading,
+      starter_frames: starterFrames,
     };
     const target = await save({
       title: "Where to keep the new zine (a .zine folder is made there)",
@@ -176,6 +183,10 @@
       <label>Size (pt)<input type="number" min="4" step="0.5" bind:value={size} /></label>
       <label>Leading (pt)<input type="number" min="4" step="0.5" bind:value={leading} /></label>
     </div>
+    <label class="check-row">
+      <input type="checkbox" bind:checked={starterFrames} />
+      Start with cover image frames and a text story through pages 3 to {fold === "eight_page_fold" ? 7 : "the second-to-last"}
+    </label>
     <div class="note">The page count is rounded up to a multiple of four. Fold and page size cannot change later.</div>
     {#if error}
       <div class="note" style="color: var(--warn);">{error}</div>

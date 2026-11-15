@@ -35,7 +35,13 @@ class AppState {
   /** Screen pixels per millimetre. */
   zoom = $state(3);
   message = $state<string | null>(null);
+  /** Margin, column, printer-margin and spine guides. */
   showGuides = $state(true);
+  showBleed = $state(false);
+  /** Dashed outlines of every frame. */
+  showOutlines = $state(false);
+  /** Grey marks at the trim corners of the spread. */
+  showCropMarks = $state(true);
   tool = $state<Tool>("select");
   /** The next canvas click continues the selected story into the clicked frame. */
   threading = $state(false);

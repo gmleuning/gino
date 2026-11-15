@@ -170,3 +170,18 @@ fn reader_spreads_export_and_render() {
     }
     let _ = ImageCache::new(&folder);
 }
+
+#[test]
+fn paged_export_has_one_trim_sized_page_per_page() {
+    let mut session = open_sample();
+    let folder = common::output_folder("paged-export");
+    let path = folder.join("sample-paged.pdf");
+    let overflows = session.export_paged_pdf(&path).unwrap();
+    assert!(overflows.is_empty());
+    let pdf = Pdf::new(std::fs::read(&path).unwrap()).expect("the PDF parses");
+    assert_eq!(pdf.pages().len(), 8);
+    let (width, height) = pdf.pages()[3].render_dimensions();
+    let to_mm = 25.4 / 72.0;
+    assert!((f64::from(width) * to_mm - 148.0).abs() < 0.1, "width {width} pt");
+    assert!((f64::from(height) * to_mm - 210.0).abs() < 0.1, "height {height} pt");
+}

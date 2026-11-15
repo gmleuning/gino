@@ -62,12 +62,15 @@
     text: "Text frame",
     image: "Image frame",
     rectangle: "Rectangle",
-    rule: "Rule",
+    rule: "Line",
     page_number: "Page number",
   };
 </script>
 
 {#if selection}
+  {#if app.view}
+    <div class="doc-title">{app.view.title}{app.dirty ? " •" : ""}</div>
+  {/if}
   <h2>{kindName[selection.kind] ?? selection.kind}</h2>
   <div class="path">{selection.frame_id} · page {selection.page + 1}</div>
   <div class="grid" style="margin-top: 10px;">

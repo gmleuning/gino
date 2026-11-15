@@ -292,6 +292,7 @@ fn temporary_folder(name: &str) -> PathBuf {
 
 fn request(fold: Fold, pages: u32, sheet: Option<Size>) -> NewDocument {
     NewDocument {
+        starter_frames: false,
         fold,
         custom_trim: None,
         page_count: pages,

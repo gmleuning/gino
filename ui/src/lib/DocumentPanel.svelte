@@ -31,7 +31,7 @@
 </script>
 
 {#if app.view && settings}
-  <h2>Document</h2>
+  <div class="doc-title">{app.view.title}{app.dirty ? " •" : ""}</div>
   <div class="path">{app.view.folder}</div>
   <div class="path">
     {foldName[settings.fold] ?? settings.fold} · {settings.trim.width} × {settings.trim.height} mm pages ·
@@ -41,6 +41,16 @@
     Sheet {settings.sheet.width} × {settings.sheet.height} mm,
     {app.view.sheet_mode === "oversize" ? "oversize: bleed and crop marks" : "same size: no bleed"}
   </div>
+
+  <section>
+    <h2>Show</h2>
+    <div class="grid">
+      <label class="check"><input type="checkbox" bind:checked={app.showGuides} />Guides</label>
+      <label class="check"><input type="checkbox" bind:checked={app.showCropMarks} />Crop marks</label>
+      <label class="check"><input type="checkbox" bind:checked={app.showOutlines} />Frame outlines</label>
+      <label class="check"><input type="checkbox" bind:checked={app.showBleed} />Bleed</label>
+    </div>
+  </section>
 
   <section>
     <h2>Pages</h2>
@@ -80,7 +90,7 @@
   </section>
 
   <div class="row" style="font-size: 11px; color: var(--muted);">
-    Tools: V select, T text, I image, R rectangle, L rule. Click a frame to select it; double-click a text frame to type.
+    Tools: V select, T text, I image, L line. Click a frame to select it and drag to move it; double-click a text frame to type.
   </div>
 {:else}
   <h2>Gino's</h2>

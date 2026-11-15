@@ -12,7 +12,7 @@ use ginos_core::fonts::Fonts;
 use ginos_core::model::{CharacterStyle, ImageFit, ParagraphStyle, Rect, Settings, Size};
 use ginos_core::presets::{default_margins, fold_sizes, NewDocument};
 use ginos_core::session::{Arrange, DocumentView, Motion, Session, Tool, Update};
-use tauri::State;
+use tauri::{Manager, State};
 
 #[derive(Default)]
 struct AppState {
@@ -318,6 +318,75 @@ fn export_imposed(path: String, sheet: Option<Size>, state: State<'_, AppState>)
 }
 
 #[tauri::command]
+fn export_paged(path: String, state: State<'_, AppState>) -> CommandResult<ExportResult> {
+    with_session(&state, |session| {
+        let target = PathBuf::from(path);
+        let overflows = session.export_paged_pdf(&target)?;
+        Ok(ExportResult {
+            path: target.to_string_lossy().into_owned(),
+            overflows,
+        })
+    })
+}
+
+/// Opens a file the app wrote (a PDF to print) in its default program.
+#[tauri::command]
+fn open_in_default_app(path: String) -> CommandResult<()> {
+    let path = PathBuf::from(path);
+    if path.extension().and_then(|extension| extension.to_str()) != Some("pdf") || !path.is_file() {
+        return Err(format!("{} is not a PDF that exists", path.display()));
+    }
+    // Explorer hands the file to whatever program opens PDFs.
+    std::process::Command::new("explorer")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("could not open {}: {error}", path.display()))
+}
+
+/// Settings that belong to this computer rather than to a document.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct Preferences {
+    /// New zines start with cover image frames and a threaded story.
+    #[serde(default = "yes")]
+    starter_frames: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self { starter_frames: true }
+    }
+}
+
+fn preferences_path(app: &tauri::AppHandle) -> CommandResult<PathBuf> {
+    let folder = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    Ok(folder.join("preferences.json"))
+}
+
+#[tauri::command]
+fn get_preferences(app: tauri::AppHandle) -> CommandResult<Preferences> {
+    let path = preferences_path(&app)?;
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(serde_json::from_str(&text).unwrap_or_default()),
+        Err(_) => Ok(Preferences::default()),
+    }
+}
+
+#[tauri::command]
+fn set_preferences(preferences: Preferences, app: tauri::AppHandle) -> CommandResult<()> {
+    let path = preferences_path(&app)?;
+    if let Some(folder) = path.parent() {
+        std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+    }
+    let text = serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
+    std::fs::write(&path, text).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn default_export_path(suffix: String, state: State<'_, AppState>) -> CommandResult<String> {
     with_session(&state, |session| {
         Ok(session.default_export_path(&suffix).to_string_lossy().into_owned())
@@ -380,6 +449,10 @@ fn main() {
             save_document,
             export_reader,
             export_imposed,
+            export_paged,
+            open_in_default_app,
+            get_preferences,
+            set_preferences,
             default_export_path,
             font_families,
         ])

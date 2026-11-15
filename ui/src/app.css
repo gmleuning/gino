@@ -317,3 +317,51 @@ select {
   color: var(--muted);
   margin-top: 8px;
 }
+
+.hide-guides .margin,
+.hide-guides .column,
+.hide-guides .printer,
+.hide-guides .spine,
+.hide-bleed .bleed {
+  display: none;
+}
+
+.inspector .doc-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  word-break: break-word;
+}
+
+.modal .check-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.modal .check-row input {
+  width: auto;
+}
+
+.modal .choice {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.modal .choice input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.modal .choice span small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}

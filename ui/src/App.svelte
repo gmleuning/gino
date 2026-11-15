@@ -10,6 +10,10 @@
   let canvas: Canvas | undefined = $state();
   let showNew = $state(false);
   let showPrint = $state(false);
+  let showPreferences = $state(false);
+  let starterFrames = $state(true);
+  let printMode = $state<"paged" | "viewed" | "folded">("paged");
+  let printing = $state(false);
   let printSheet = $state<"document" | "a3" | "a4" | "custom">("document");
   let customSheet = $state<Size>({ width: 320, height: 450 });
 
@@ -17,8 +21,7 @@
     { tool: "select", label: "Select", key: "V" },
     { tool: "text", label: "Text", key: "T" },
     { tool: "image", label: "Image", key: "I" },
-    { tool: "rectangle", label: "Rectangle", key: "R" },
-    { tool: "rule", label: "Rule", key: "L" },
+    { tool: "rule", label: "Line", key: "L" },
   ];
 
   async function loadFonts() {
@@ -91,19 +94,42 @@
     }
   }
 
-  async function exportImposed() {
+  /** Writes the chosen print PDF into the .zine folder and opens it in the PDF viewer to print. */
+  async function print() {
+    printing = true;
     try {
-      const sheet = chosenPrintSheet();
-      const suggested = await api.defaultExportPath("print");
-      const target = await save({
-        title: "Export for print",
-        defaultPath: suggested,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (!target) return;
+      const path = await api.defaultExportPath(`print-${printMode}`);
+      const result =
+        printMode === "paged"
+          ? await api.exportPaged(path)
+          : printMode === "viewed"
+            ? await api.exportReader(path)
+            : await api.exportImposed(path, chosenPrintSheet());
       showPrint = false;
-      const result = await api.exportImposed(target, sheet);
-      app.say(`Exported ${result.path}. Print double-sided, flipping on the short edge.${overflowWarning(result.overflows)}`);
+      await api.openInDefaultApp(result.path);
+      const how =
+        printMode === "folded" ? " Print double-sided, flipping on the short edge." : "";
+      app.say(`Opened ${result.path} to print.${how}${overflowWarning(result.overflows)}`);
+    } catch (error) {
+      app.say(String(error));
+    } finally {
+      printing = false;
+    }
+  }
+
+  async function openPreferences() {
+    try {
+      starterFrames = (await api.getPreferences()).starter_frames;
+    } catch {
+      starterFrames = true;
+    }
+    showPreferences = true;
+  }
+
+  async function savePreferences() {
+    try {
+      await api.setPreferences({ starter_frames: starterFrames });
+      showPreferences = false;
     } catch (error) {
       app.say(String(error));
     }
@@ -130,8 +156,10 @@
       run(api.redo);
     } else if (event.ctrlKey && key === "e" && app.view) {
       event.preventDefault();
-      if (event.shiftKey) showPrint = true;
-      else exportReader();
+      exportReader();
+    } else if (event.ctrlKey && key === "p" && app.view) {
+      event.preventDefault();
+      showPrint = true;
     }
   }
 </script>
@@ -140,7 +168,6 @@
 
 <div class="layout">
   <div class="topbar">
-    <span class="title">Gino's{app.view ? ` — ${app.view.title}${app.dirty ? " •" : ""}` : ""}</span>
     <button onclick={() => (showNew = true)}>New…</button>
     <button onclick={() => openDocument()}>Open…</button>
     <button disabled={!app.view || !app.dirty} onclick={() => run(api.save).then(() => app.say("Saved"))}>Save</button>
@@ -162,10 +189,8 @@
     {/if}
     <span class="spacer"></span>
     <button disabled={!app.view} onclick={exportReader}>Export reader spreads…</button>
-    <button disabled={!app.view} onclick={() => (showPrint = true)}>Export for print…</button>
-    <button disabled={!app.view} onclick={() => (app.showGuides = !app.showGuides)}>
-      {app.showGuides ? "Hide guides" : "Show guides"}
-    </button>
+    <button disabled={!app.view} onclick={() => (showPrint = true)} title="Ctrl+P">Print…</button>
+    <button onclick={openPreferences}>Preferences…</button>
     <button disabled={!app.view} onclick={() => canvas?.zoomBy(1 / 1.25)}>−</button>
     <button disabled={!app.view} onclick={() => canvas?.fit()}>Fit</button>
     <button disabled={!app.view} onclick={() => canvas?.zoomBy(1.25)}>+</button>
@@ -214,32 +239,61 @@
 
 {#if showPrint && app.view}
   <div class="modal-backdrop" role="presentation">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Export for print">
-      <h2>Export for print</h2>
-      <div class="grid">
-        <label class="wide">
-          Sheet
-          <select bind:value={printSheet}>
-            <option value="document">
-              The document's sheet ({app.view.settings.sheet.width} × {app.view.settings.sheet.height} mm)
-            </option>
-            <option value="a3">A3</option>
-            <option value="a4">A4</option>
-            <option value="custom">Another size…</option>
-          </select>
-        </label>
-        {#if printSheet === "custom"}
-          <label>Width (mm)<input type="number" min="50" step="1" bind:value={customSheet.width} /></label>
-          <label>Height (mm)<input type="number" min="50" step="1" bind:value={customSheet.height} /></label>
-        {/if}
-      </div>
-      <div class="note">
-        Pages are placed in folding order. A sheet larger than the imposed pages gets bleed, crop marks and creep;
-        a same-size sheet gets neither. Print double-sided, flipping on the short edge.
-      </div>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Print">
+      <h2>Print</h2>
+      <label class="choice">
+        <input type="radio" bind:group={printMode} value="paged" />
+        <span>Paged<small>Every page on its own sheet at page size ({app.view.settings.trim.width} × {app.view.settings.trim.height} mm), in reading order.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" bind:group={printMode} value="viewed" />
+        <span>Viewed<small>As laid out in Gino's: the covers alone, the inside pages as spreads.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" bind:group={printMode} value="folded" />
+        <span>Folded<small>Pages in folding order, to print double-sided (flip on the short edge), fold and staple.</small></span>
+      </label>
+      {#if printMode === "folded"}
+        <div class="grid" style="margin-top: 6px;">
+          <label class="wide">
+            Sheet
+            <select bind:value={printSheet}>
+              <option value="document">
+                The document's sheet ({app.view.settings.sheet.width} × {app.view.settings.sheet.height} mm)
+              </option>
+              <option value="a3">A3</option>
+              <option value="a4">A4</option>
+              <option value="custom">Another size…</option>
+            </select>
+          </label>
+          {#if printSheet === "custom"}
+            <label>Width (mm)<input type="number" min="50" step="1" bind:value={customSheet.width} /></label>
+            <label>Height (mm)<input type="number" min="50" step="1" bind:value={customSheet.height} /></label>
+          {/if}
+        </div>
+        <div class="note">A sheet larger than the imposed pages gets bleed, crop marks and creep; a same-size sheet gets neither.</div>
+      {/if}
+      <div class="note">The PDF is saved in the .zine folder and opens in your PDF viewer, where you print it.</div>
       <div class="actions">
         <button onclick={() => (showPrint = false)}>Cancel</button>
-        <button onclick={exportImposed}>Choose where to save…</button>
+        <button onclick={print} disabled={printing}>{printing ? "Preparing…" : "Print…"}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showPreferences}
+  <div class="modal-backdrop" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Preferences">
+      <h2>Preferences</h2>
+      <label class="check-row">
+        <input type="checkbox" checked={!starterFrames} onchange={(e) => (starterFrames = !(e.target as HTMLInputElement).checked)} />
+        Start new zines with no image or text frames
+      </label>
+      <div class="note">Off (the default): new zines get an image frame on the front and back covers, a blank inside front cover, and one text story threaded through the pages after it.</div>
+      <div class="actions">
+        <button onclick={() => (showPreferences = false)}>Cancel</button>
+        <button onclick={savePreferences}>Save</button>
       </div>
     </div>
   </div>

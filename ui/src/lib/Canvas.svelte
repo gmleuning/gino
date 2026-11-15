@@ -16,6 +16,14 @@
   const NUDGE_MM = 0.5;
   const NUDGE_LARGE_MM = 5;
   const MARKER_PX = 12;
+  /** Room around the spread for bleed and crop marks, in millimetres. */
+  const PAD = 10;
+  /** Crop marks: gap from the trim edge and length, in millimetres. */
+  const MARK_GAP = 2;
+  const MARK_LENGTH = 5;
+  /** Two presses count as a double click within this time and distance. */
+  const MULTI_CLICK_MS = 450;
+  const MULTI_CLICK_PX = 5;
 
   let wrapper: HTMLElement | undefined = $state();
   let svgElement: SVGSVGElement | undefined = $state();
@@ -26,8 +34,43 @@
   let composing = false;
 
   const spread = $derived(app.view?.spreads[app.currentSpread] ?? null);
-  const pxWidth = $derived(spread ? spread.width * app.zoom : 0);
-  const pxHeight = $derived(spread ? spread.height * app.zoom : 0);
+  const pxWidth = $derived(spread ? (spread.width + 2 * PAD) * app.zoom : 0);
+  const pxHeight = $derived(spread ? (spread.height + 2 * PAD) * app.zoom : 0);
+
+  // WebView2 reports no click count on pointer events, so count presses here.
+  let lastPress = { time: 0, x: 0, y: 0, count: 0 };
+  function clickCount(event: PointerEvent): number {
+    const near = Math.hypot(event.clientX - lastPress.x, event.clientY - lastPress.y) <= MULTI_CLICK_PX;
+    const soon = event.timeStamp - lastPress.time <= MULTI_CLICK_MS;
+    const count = near && soon ? Math.min(lastPress.count + 1, 3) : 1;
+    lastPress = { time: event.timeStamp, x: event.clientX, y: event.clientY, count };
+    return count;
+  }
+
+  /** Crop marks at the spread's corners and at each spine, as path data. */
+  const cropMarks = $derived.by(() => {
+    if (!spread) return "";
+    const w = spread.width;
+    const h = spread.height;
+    const g = MARK_GAP;
+    const l = MARK_LENGTH;
+    const parts: string[] = [];
+    for (const [x, dx] of [
+      [0, -1],
+      [w, 1],
+    ]) {
+      for (const [y, dy] of [
+        [0, -1],
+        [h, 1],
+      ]) {
+        parts.push(`M ${x + dx * g} ${y} h ${dx * l}`, `M ${x} ${y + dy * g} v ${dy * l}`);
+      }
+    }
+    for (const [, offset] of spread.pages.slice(1)) {
+      parts.push(`M ${offset} ${-g} v ${-l}`, `M ${offset} ${h + g} v ${l}`);
+    }
+    return parts.join(" ");
+  });
   const handleMm = $derived(HANDLE_PX / app.zoom);
   const markerMm = $derived(MARKER_PX / app.zoom);
 
@@ -44,7 +87,7 @@
     if (!wrapper || !spread) return;
     const available = Math.max(wrapper.clientWidth - 60, 100);
     const availableHeight = Math.max(wrapper.clientHeight - 60, 100);
-    app.zoom = Math.min(available / spread.width, availableHeight / spread.height);
+    app.zoom = Math.min(available / (spread.width + 2 * PAD), availableHeight / (spread.height + 2 * PAD));
   }
 
   export function zoomBy(factor: number) {
@@ -86,6 +129,7 @@
 
   async function onPointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
+    const clicks = clickCount(event);
     // Keep focus where it is (the textarea, while editing) until the core answers.
     event.preventDefault();
     const spreadPoint = toSpread(event);
@@ -103,7 +147,7 @@
     dragging = true;
     const tool: Tool = app.tool;
     await enqueue(() =>
-      api.pointerDown(local.page, local.x, local.y, SNAP_PX / app.zoom, tool, event.shiftKey, Math.min(event.detail, 3)),
+      api.pointerDown(local.page, local.x, local.y, SNAP_PX / app.zoom, tool, event.shiftKey, clicks),
     );
     focus();
   }
@@ -147,7 +191,7 @@
     zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
   }
 
-  const toolKeys: Record<string, Tool> = { v: "select", t: "text", i: "image", r: "rectangle", l: "rule" };
+  const toolKeys: Record<string, Tool> = { v: "select", t: "text", i: "image", l: "rule" };
 
   /** Keys while frames, not text, have the focus. */
   async function onKeyDown(event: KeyboardEvent) {
@@ -408,7 +452,7 @@
         bind:this={svgElement}
         width={pxWidth}
         height={pxHeight}
-        viewBox={`0 0 ${spread.width} ${spread.height}`}
+        viewBox={`${-PAD} ${-PAD} ${spread.width + 2 * PAD} ${spread.height + 2 * PAD}`}
         xmlns="http://www.w3.org/2000/svg"
         style:cursor={app.threading ? "alias" : app.tool !== "select" ? "crosshair" : dragging ? "move" : app.text ? "text" : "default"}
         onpointerdown={onPointerDown}
@@ -423,8 +467,12 @@
             {#each page.frame_ids as frameId (frameId)}
               <g use:fragment={app.frames.get(frameKey(pageIndex, frameId))?.svg ?? ""}></g>
             {/each}
-            {#if app.showGuides}
-              <g use:fragment={page.guides_svg}></g>
+            <g
+              use:fragment={page.guides_svg}
+              class:hide-guides={!app.showGuides}
+              class:hide-bleed={!app.showBleed}
+            ></g>
+            {#if app.showOutlines}
               {#each page.frame_ids as frameId (frameId)}
                 {@const patch = app.frames.get(frameKey(pageIndex, frameId))}
                 {#if patch && patch.kind !== "rule"}
@@ -457,6 +505,10 @@
             {/if}
           </g>
         {/each}
+
+        {#if app.showCropMarks}
+          <path class="crop-marks" d={cropMarks} fill="none" stroke="#9a968e" stroke-width="0.75" vector-effect="non-scaling-stroke" pointer-events="none" />
+        {/if}
 
         {#if app.selection && selectionOffset !== null && !app.text}
           {@const r = app.selection.rect}
@@ -552,8 +604,8 @@
           autocomplete="off"
           spellcheck="false"
           aria-label="Text input"
-          style:left={`${((caretOffset ?? 0) + (caret?.x ?? 0)) * app.zoom}px`}
-          style:top={`${(caret?.top ?? 0) * app.zoom}px`}
+          style:left={`${(PAD + (caretOffset ?? 0) + (caret?.x ?? 0)) * app.zoom}px`}
+          style:top={`${(PAD + (caret?.top ?? 0)) * app.zoom}px`}
           style:height={`${Math.max(((caret?.bottom ?? 0) - (caret?.top ?? 0)) * app.zoom, 8)}px`}
           style:font-size={`${Math.max(((caret?.bottom ?? 0) - (caret?.top ?? 0)) * app.zoom * 0.8, 8)}px`}
           oncompositionstart={onCompositionStart}

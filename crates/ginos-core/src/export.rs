@@ -36,6 +36,17 @@ pub fn reader_pdf(
     Ok((pdf, composition))
 }
 
+/// Renders every page on its own PDF page at the trim size, in reading order.
+pub fn paged_pdf(
+    fonts: &mut Fonts,
+    images: &mut ImageCache,
+    document: &Document,
+) -> Result<(Vec<u8>, Composition), Error> {
+    let composition = compose(fonts, document, images)?;
+    let pdf = scene_to_pdf(&composition.scene)?;
+    Ok((pdf, composition))
+}
+
 /// Renders the document imposed for printing: one PDF page per sheet side,
 /// on the document's sheet or on `sheet` when given.
 pub fn imposed_pdf(
