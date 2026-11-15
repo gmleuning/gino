@@ -47,6 +47,28 @@ pub fn paged_pdf(
     Ok((pdf, composition))
 }
 
+/// Renders one page (counted from zero) as a one-page PDF at the trim size.
+pub fn page_pdf(
+    fonts: &mut Fonts,
+    images: &mut ImageCache,
+    document: &Document,
+    page: usize,
+) -> Result<(Vec<u8>, Composition), Error> {
+    if page >= document.pages.len() {
+        return Err(Error::Invalid(format!(
+            "there is no page {}; the document has {} pages",
+            page + 1,
+            document.pages.len()
+        )));
+    }
+    let composition = compose(fonts, document, images)?;
+    let scene = Scene {
+        pages: vec![composition.scene.pages[page].clone()],
+    };
+    let pdf = scene_to_pdf(&scene)?;
+    Ok((pdf, composition))
+}
+
 /// Renders the document imposed for printing: one PDF page per sheet side,
 /// on the document's sheet or on `sheet` when given.
 pub fn imposed_pdf(

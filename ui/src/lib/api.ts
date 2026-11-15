@@ -279,6 +279,7 @@ export const api = {
   save: () => invoke<Update>("save_document"),
   exportReader: (path: string | null) => invoke<ExportResult>("export_reader", { path }),
   exportImposed: (path: string, sheet: Size | null) => invoke<ExportResult>("export_imposed", { path, sheet }),
+  exportPage: (path: string, page: number) => invoke<ExportResult>("export_page", { path, page }),
   exportPaged: (path: string) => invoke<ExportResult>("export_paged", { path }),
   openInDefaultApp: (path: string) => invoke<void>("open_in_default_app", { path }),
   getPreferences: () => invoke<Preferences>("get_preferences"),

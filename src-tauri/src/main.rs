@@ -1,4 +1,4 @@
-//! Gino's desktop shell. The interface sends intents; every command here
+//! Gino desktop shell. The interface sends intents; every command here
 //! forwards to the core's [`Session`], which owns the document, and returns
 //! what changed. No layout happens in this crate.
 
@@ -329,6 +329,18 @@ fn export_paged(path: String, state: State<'_, AppState>) -> CommandResult<Expor
     })
 }
 
+#[tauri::command]
+fn export_page(path: String, page: usize, state: State<'_, AppState>) -> CommandResult<ExportResult> {
+    with_session(&state, |session| {
+        let target = PathBuf::from(path);
+        let overflows = session.export_page_pdf(&target, page)?;
+        Ok(ExportResult {
+            path: target.to_string_lossy().into_owned(),
+            overflows,
+        })
+    })
+}
+
 /// Opens a file the app wrote (a PDF to print) in its default program.
 #[tauri::command]
 fn open_in_default_app(path: String) -> CommandResult<()> {
@@ -450,6 +462,7 @@ fn main() {
             export_reader,
             export_imposed,
             export_paged,
+            export_page,
             open_in_default_app,
             get_preferences,
             set_preferences,
@@ -457,5 +470,5 @@ fn main() {
             font_families,
         ])
         .run(tauri::generate_context!())
-        .expect("Gino's could not start its window");
+        .expect("Gino could not start its window");
 }

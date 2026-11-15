@@ -185,3 +185,14 @@ fn paged_export_has_one_trim_sized_page_per_page() {
     assert!((f64::from(width) * to_mm - 148.0).abs() < 0.1, "width {width} pt");
     assert!((f64::from(height) * to_mm - 210.0).abs() < 0.1, "height {height} pt");
 }
+
+#[test]
+fn a_single_page_exports_alone() {
+    let mut session = open_sample();
+    let folder = common::output_folder("page-export");
+    let path = folder.join("sample-page-3.pdf");
+    session.export_page_pdf(&path, 2).unwrap();
+    let pdf = Pdf::new(std::fs::read(&path).unwrap()).expect("the PDF parses");
+    assert_eq!(pdf.pages().len(), 1);
+    assert!(session.export_page_pdf(&folder.join("none.pdf"), 99).is_err());
+}

@@ -6,6 +6,7 @@
   import Canvas from "./lib/Canvas.svelte";
   import Inspector from "./lib/Inspector.svelte";
   import NewDocument from "./lib/NewDocument.svelte";
+  import MenuBar, { type Menu } from "./lib/MenuBar.svelte";
 
   let canvas: Canvas | undefined = $state();
   let showNew = $state(false);
@@ -16,6 +17,11 @@
   let printing = $state(false);
   let printSheet = $state<"document" | "a3" | "a4" | "custom">("document");
   let customSheet = $state<Size>({ width: 320, height: 450 });
+  let showPages = $state(true);
+  let showPanel = $state(true);
+  let showShortcuts = $state(false);
+  let showExportPage = $state(false);
+  let exportPageNumber = $state(1);
 
   const tools: { tool: Tool; label: string; key: string }[] = [
     { tool: "select", label: "Select", key: "V" },
@@ -80,6 +86,122 @@
       app.say(String(error));
     }
   }
+
+  /** The page shown first in the current spread, or the selected frame's page. */
+  function currentPage(): number {
+    if (app.selection) return app.selection.page;
+    return app.view?.spreads[app.currentSpread]?.pages[0]?.[0] ?? 0;
+  }
+
+  async function exportPage() {
+    try {
+      const page = Math.round(exportPageNumber) - 1;
+      const suggested = await api.defaultExportPath(`page-${page + 1}`);
+      const target = await save({
+        title: `Export page ${page + 1}`,
+        defaultPath: suggested,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (!target) return;
+      showExportPage = false;
+      const result = await api.exportPage(target, page);
+      app.say(`Exported ${result.path}.`);
+    } catch (error) {
+      app.say(String(error));
+    }
+  }
+
+  function openPrint(mode: "paged" | "viewed" | "folded") {
+    printMode = mode;
+    showPrint = true;
+  }
+
+  const saveDocument = () => run(api.save).then((update) => update && app.say("Saved"));
+
+  const menus: Menu[] = $derived([
+    {
+      label: "File",
+      items: [
+        { label: "New…", shortcut: "Ctrl+N", action: () => (showNew = true) },
+        { label: "Open…", shortcut: "Ctrl+O", action: () => openDocument() },
+        { label: "Save", shortcut: "Ctrl+S", action: saveDocument, disabled: !app.view },
+      ],
+    },
+    {
+      label: "Edit",
+      items: [
+        { label: "Save", shortcut: "Ctrl+S", action: saveDocument, disabled: !app.view },
+        { separator: true },
+        { label: "Undo", shortcut: "Ctrl+Z", action: () => run(api.undo), disabled: !app.canUndo },
+        { label: "Redo", shortcut: "Ctrl+Y", action: () => run(api.redo), disabled: !app.canRedo },
+        { separator: true },
+        {
+          label: "Export",
+          disabled: !app.view,
+          submenu: [
+            { label: "Reader spreads…", shortcut: "Ctrl+E", action: exportReader },
+            {
+              label: "Single page…",
+              action: () => {
+                exportPageNumber = currentPage() + 1;
+                showExportPage = true;
+              },
+            },
+          ],
+        },
+        { separator: true },
+        { label: "Shortcut keys", action: () => (showShortcuts = true) },
+        { label: "Preferences…", shortcut: "Ctrl+,", action: openPreferences },
+      ],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Guides", shortcut: "Ctrl+;", checked: app.showGuides, action: () => (app.showGuides = !app.showGuides) },
+        { label: "Crop marks", checked: app.showCropMarks, action: () => (app.showCropMarks = !app.showCropMarks) },
+        { label: "Frame outlines", checked: app.showOutlines, action: () => (app.showOutlines = !app.showOutlines) },
+        { label: "Bleed", checked: app.showBleed, action: () => (app.showBleed = !app.showBleed) },
+        { separator: true },
+        { label: "Pages", checked: showPages, action: () => (showPages = !showPages) },
+        { label: "Document panel", checked: showPanel, action: () => (showPanel = !showPanel) },
+        { separator: true },
+        { label: "Zoom in", shortcut: "Ctrl+=", action: () => canvas?.zoomBy(1.25), disabled: !app.view },
+        { label: "Zoom out", shortcut: "Ctrl+-", action: () => canvas?.zoomBy(1 / 1.25), disabled: !app.view },
+        { label: "Fit", shortcut: "Ctrl+0", action: () => canvas?.fit(), disabled: !app.view },
+        { separator: true },
+        {
+          label: "Print",
+          disabled: !app.view,
+          submenu: [
+            { label: "Paged…", shortcut: "Ctrl+P", action: () => openPrint("paged") },
+            { label: "Viewed…", action: () => openPrint("viewed") },
+            { label: "Folded…", action: () => openPrint("folded") },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  const shortcuts: [string, string][] = [
+    ["Ctrl+N", "New zine"],
+    ["Ctrl+O", "Open"],
+    ["Ctrl+S", "Save"],
+    ["Ctrl+Z / Ctrl+Y", "Undo / redo (Ctrl+Shift+Z also redoes)"],
+    ["Ctrl+E", "Export reader spreads"],
+    ["Ctrl+P", "Print"],
+    ["Ctrl+,", "Preferences"],
+    ["Ctrl+;", "Show or hide guides"],
+    ["Ctrl+= / Ctrl+- / Ctrl+0", "Zoom in / out / fit (Ctrl+wheel zooms too)"],
+    ["V T I L", "Select, text, image and line tools"],
+    ["Drag", "Move a frame; drag a handle to resize"],
+    ["Double-click", "Type in a text frame (Enter does the same for a selected frame)"],
+    ["Arrows", "Move the selected frame 0.5 mm, with Shift 5 mm"],
+    ["Delete", "Delete the selected frame"],
+    ["Page Up / Page Down", "Previous / next spread"],
+    ["Escape", "Stop typing, cancel threading, or deselect"],
+    ["While typing", "Arrows, Home, End move; Shift selects; Ctrl jumps by word or to the story's ends"],
+    ["While typing", "Ctrl+A selects the story; Ctrl+Backspace deletes a word"],
+  ];
 
   function chosenPrintSheet(): Size | null {
     switch (printSheet) {
@@ -159,20 +281,34 @@
       exportReader();
     } else if (event.ctrlKey && key === "p" && app.view) {
       event.preventDefault();
-      showPrint = true;
+      openPrint("paged");
+    } else if (event.ctrlKey && key === ",") {
+      event.preventDefault();
+      openPreferences();
+    } else if (event.ctrlKey && key === ";") {
+      event.preventDefault();
+      app.showGuides = !app.showGuides;
+    } else if (event.ctrlKey && (key === "=" || key === "+") && app.view) {
+      event.preventDefault();
+      canvas?.zoomBy(1.25);
+    } else if (event.ctrlKey && key === "-" && app.view) {
+      event.preventDefault();
+      canvas?.zoomBy(1 / 1.25);
+    } else if (event.ctrlKey && key === "0" && app.view) {
+      event.preventDefault();
+      canvas?.fit();
     }
   }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="layout">
+<div
+  class="layout"
+  style:grid-template-columns={`${showPages ? "180px " : ""}1fr${showPanel ? " auto" : ""}`}
+>
   <div class="topbar">
-    <button onclick={() => (showNew = true)}>New…</button>
-    <button onclick={() => openDocument()}>Open…</button>
-    <button disabled={!app.view || !app.dirty} onclick={() => run(api.save).then(() => app.say("Saved"))}>Save</button>
-    <button disabled={!app.canUndo} onclick={() => run(api.undo)}>Undo</button>
-    <button disabled={!app.canRedo} onclick={() => run(api.redo)}>Redo</button>
+    <MenuBar {menus} />
     {#if app.view}
       <div class="tools" role="toolbar" aria-label="Tools">
         {#each tools as entry}
@@ -188,17 +324,13 @@
       </div>
     {/if}
     <span class="spacer"></span>
-    <button disabled={!app.view} onclick={exportReader}>Export reader spreads…</button>
-    <button disabled={!app.view} onclick={() => (showPrint = true)} title="Ctrl+P">Print…</button>
-    <button onclick={openPreferences}>Preferences…</button>
-    <button disabled={!app.view} onclick={() => canvas?.zoomBy(1 / 1.25)}>−</button>
-    <button disabled={!app.view} onclick={() => canvas?.fit()}>Fit</button>
-    <button disabled={!app.view} onclick={() => canvas?.zoomBy(1.25)}>+</button>
   </div>
 
-  <aside class="strip">
-    <PageStrip />
-  </aside>
+  {#if showPages}
+    <aside class="strip">
+      <PageStrip />
+    </aside>
+  {/if}
 
   <main class="canvas-wrap" style="position: relative;">
     {#if app.view}
@@ -214,9 +346,11 @@
     {/if}
   </main>
 
-  <aside class="inspector">
-    <Inspector />
-  </aside>
+  {#if showPanel}
+    <aside class="inspector">
+      <Inspector />
+    </aside>
+  {/if}
 
   <div class="statusbar">
     <span>{app.message ?? ""}</span>
@@ -247,7 +381,7 @@
       </label>
       <label class="choice">
         <input type="radio" bind:group={printMode} value="viewed" />
-        <span>Viewed<small>As laid out in Gino's: the covers alone, the inside pages as spreads.</small></span>
+        <span>Viewed<small>As laid out in Gino: the covers alone, the inside pages as spreads.</small></span>
       </label>
       <label class="choice">
         <input type="radio" bind:group={printMode} value="folded" />
@@ -294,6 +428,43 @@
       <div class="actions">
         <button onclick={() => (showPreferences = false)}>Cancel</button>
         <button onclick={savePreferences}>Save</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showExportPage && app.view}
+  <div class="modal-backdrop" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Export a single page">
+      <h2>Export a single page</h2>
+      <div class="grid">
+        <label>
+          Page
+          <input type="number" min="1" max={app.view.pages.length} step="1" bind:value={exportPageNumber} />
+        </label>
+      </div>
+      <div class="note">A one-page PDF at page size ({app.view.settings.trim.width} × {app.view.settings.trim.height} mm).</div>
+      <div class="actions">
+        <button onclick={() => (showExportPage = false)}>Cancel</button>
+        <button onclick={exportPage} disabled={exportPageNumber < 1 || exportPageNumber > app.view.pages.length}>Choose where to save…</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showShortcuts}
+  <div class="modal-backdrop" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Shortcut keys">
+      <h2>Shortcut keys</h2>
+      <table class="shortcuts">
+        <tbody>
+          {#each shortcuts as [keys, what]}
+            <tr><td><kbd>{keys}</kbd></td><td>{what}</td></tr>
+          {/each}
+        </tbody>
+      </table>
+      <div class="actions">
+        <button onclick={() => (showShortcuts = false)}>Close</button>
       </div>
     </div>
   </div>

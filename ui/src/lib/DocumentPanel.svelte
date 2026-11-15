@@ -93,6 +93,6 @@
     Tools: V select, T text, I image, L line. Click a frame to select it and drag to move it; double-click a text frame to type.
   </div>
 {:else}
-  <h2>Gino's</h2>
+  <h2>Gino</h2>
   <div class="path">No document open.</div>
 {/if}

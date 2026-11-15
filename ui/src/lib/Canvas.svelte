@@ -255,25 +255,6 @@
         event.preventDefault();
         app.currentSpread = Math.max(app.currentSpread - 1, 0);
         break;
-      case "0":
-        if (event.ctrlKey) {
-          event.preventDefault();
-          fit();
-        }
-        break;
-      case "=":
-      case "+":
-        if (event.ctrlKey) {
-          event.preventDefault();
-          zoomBy(1.25);
-        }
-        break;
-      case "-":
-        if (event.ctrlKey) {
-          event.preventDefault();
-          zoomBy(1 / 1.25);
-        }
-        break;
     }
   }
 

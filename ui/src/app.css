@@ -67,7 +67,7 @@ select {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 10px 0 0;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
@@ -364,4 +364,105 @@ select {
   display: block;
   color: var(--muted);
   font-size: 11px;
+}
+
+.menubar {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.menubar .menu {
+  position: relative;
+  display: flex;
+}
+
+.menubar .menu-title {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 12px;
+}
+
+.menubar .menu-title:hover,
+.menubar .menu-title.open {
+  background: #e4e0d6;
+}
+
+.menubar .dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 230px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  padding: 4px 0;
+  z-index: 30;
+}
+
+.menubar .dropdown.submenu {
+  top: -5px;
+  left: 100%;
+  border-radius: 6px;
+}
+
+.menubar .item-wrap {
+  position: relative;
+}
+
+.menubar .item {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 5px 12px 5px 6px;
+  text-align: left;
+}
+
+.menubar .item:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.menubar .item:hover:not(:disabled) .shortcut {
+  color: #fff;
+}
+
+.menubar .tick {
+  text-align: center;
+}
+
+.menubar .shortcut {
+  color: var(--muted);
+  font-size: 12px;
+  padding-left: 24px;
+}
+
+.menubar .separator {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+}
+
+.modal table.shortcuts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.modal table.shortcuts td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.modal table.shortcuts kbd {
+  font-family: inherit;
+  white-space: nowrap;
+  font-weight: 600;
 }

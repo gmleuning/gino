@@ -1635,6 +1635,13 @@ impl Session {
         Ok(composition.overflows)
     }
 
+    /// Writes one page (counted from zero) as a one-page PDF.
+    pub fn export_page_pdf(&mut self, path: &Path, page: usize) -> Result<Vec<Overflow>, Error> {
+        let (pdf, composition) = crate::export::page_pdf(&mut self.fonts, &mut self.images, &self.zine.document, page)?;
+        write_pdf(path, &pdf)?;
+        Ok(composition.overflows)
+    }
+
     /// Writes the imposed PDF for printing, on the document's sheet or on `sheet`.
     pub fn export_imposed_pdf(&mut self, path: &Path, sheet: Option<Size>) -> Result<Vec<Overflow>, Error> {
         let (pdf, composition) = imposed_pdf(&mut self.fonts, &mut self.images, &self.zine.document, sheet)?;
