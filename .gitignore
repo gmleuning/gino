@@ -5,5 +5,5 @@
 /src-tauri/gen
 /src-tauri/target
 
-# Own logo and brand work
-docs/brand/
+# Notes, plans and brand work stay local
+docs/

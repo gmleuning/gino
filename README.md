@@ -1,132 +1,55 @@
 # Gino
 
-A small, free, offline desktop program for laying out zines on Windows. Place text and images on pages, see them as spreads, and print a correctly imposed PDF that folds into a booklet on the first try.
+A small, free, offline Windows program for laying out zines. Place text and images on pages, see them as spreads, and print pages that fold into a booklet on the first try.
 
-Gino does one narrow job. It is not a general page-layout program and does not try to become one.
+Gino does one narrow job. It is not a general page-layout program.
 
-> **Status:** in development. Nothing below is guaranteed to work until milestone 3 ("first usable version") is reached. See [Roadmap](#roadmap).
+## What it does today
 
----
+- **Starts from a fold.** Choose A5 pages on A4, A6 pages on A5, the eight-page single-sheet fold, or a custom page size. Margins, gutter and sheet follow from the choice, and you can change them in the document panel.
+- **Starter layout.** New zines begin with an image frame on the front and back covers, a blank inside front cover, and one text story threaded through every column from page 3 to the second-to-last page. A preference starts new zines empty instead.
+- **Frames.** Text, image and line frames in millimetres, snapping to margins, columns, the spine and each other. Click to select and drag; handles appear for resizing; arrow keys nudge (Shift for 5 mm); Delete removes. Double-click a text frame, or press Enter, to type in it.
+- **Bilingual text.** Korean and English set together, with Korean input-method support on the canvas. Paragraph styles pick a Latin font, a Korean font and whether Korean breaks between syllables or only at spaces.
+- **Threaded text.** A story flows from frame to frame; overflow is marked, and you click the marker and then the next frame to continue it.
+- **Images.** PNG, JPEG and TIFF, linked by path. The inspector shows the whole original, its pixel size, the resolution the file states and the resolution it prints at in the frame. Fill, fit or manual crop; **Crop to page** and **Crop to bleed** trim a frame that runs off the edge without moving the picture.
+- **Guides, off by default.** Margins and columns, bleed (light red, outer edges only), frame outlines and crop marks at the text area can each be shown or hidden. The page always stays white.
+- **Print.** Three kinds, each with a resolution choice (default 300 dpi; pictures finer than that are reduced, coarser ones are left alone):
+  - *Paged*: every page on its own, at page size.
+  - *Viewed*: spreads as laid out on screen.
+  - *Folded*: imposed sheets in fold order, to print double-sided flipping on the short edge, at actual size.
+  - A single page can also be exported alone. Fonts are embedded in every PDF.
+- **Undo and redo** for every change, and **preferences** for the colour scheme (light, dark or follow Windows), interface font and size, what shows at start, new-zine fonts and sizes, and print resolution.
+- **Every command has a changeable shortcut.** See Edit → Shortcut keys.
 
-## What it does
-
-- **Starts from a fold, not a page size.** Choose a fold format (A5 saddle-stitch on A4, A6 saddle-stitch on A5, or the eight-page single-sheet mini zine). Trim size, page count rules, margins and gutter follow from that choice.
-- **Frames on pages.** Text frames, image frames, rectangles and rules, positioned in millimetres, snapping to margins, the column grid, the spine and each other.
-- **Bilingual text.** Korean and English set together, with correct line breaking for both and Korean input-method support while typing on the canvas. Each paragraph style chooses whether Korean breaks between syllables or only at spaces.
-- **Changeable fonts.** Every paragraph style has a Latin font and a Korean font, both changeable at any time, plus a size scale for the Korean so the two faces sit well together.
-- **Threaded text.** A long piece flows from frame to frame across pages.
-- **Styles.** A short list of paragraph styles and character styles. No inheritance trees.
-- **Page numbers.** A page-number frame on the master page numbers every page automatically; you choose the first numbered page, so covers stay clean.
-- **Images.** PNG, JPEG, TIFF and SVG, linked rather than copied, with a warning when an image's printed resolution is too low.
-- **Imposition and export.** One button produces either an imposed PDF (for a home printer's double-sided mode or a copy shop) or a reader-spread PDF for screens. Fonts are embedded and subset. Two sheet modes:
-  - **Same-size sheet** (for example two A5 pages on A4): the pages fill the paper, so there is no bleed and no crop marks; the canvas draws a printer-margin guide showing what a home printer will clip.
-  - **Oversize sheet** (for trimming at a copy shop): 3 mm bleed and crop marks.
-- **Photocopy preview.** Greyscale and one-bit threshold views show what will survive a photocopier.
-
-## What it deliberately does not do
-
-Drawing tools (use Inkscape or Krita and import SVG), colour management for offset printing, Risograph separations, multiple master pages, footnotes and indexes, plugins, scripting, cloud sync, macOS or Linux builds. Automatic hyphenation is planned for a later version; until then, narrow justified columns of English text will show uneven spacing, so left-aligned is the safer setting.
-
-## The one design rule that matters
-
-The screen never lies about the print. The Rust core lays out every glyph once, and the same positioned glyphs are drawn to the canvas and written to the PDF. The interface never computes a line break of its own.
-
----
-
-## Building from source (Windows)
-
-### Requirements
-
-| Tool | Notes |
-| --- | --- |
-| Rust (stable, via `rustup`) | Version 1.92 or later; the PDF library requires it |
-| Microsoft C++ Build Tools | "Desktop development with C++" workload |
-| Microsoft Edge WebView2 Runtime | Already present on current Windows 10 and 11 |
-| Node.js | Long-term-support release |
-
-### Build and run
-
-```powershell
-git clone <repository-url> ginos
-cd ginos
-npm install
-npm run tauri dev        # development build with live reload
-npm run tauri build      # release installer in src-tauri\target\release\bundle
-```
-
-### Run the core tests (no window needed)
-
-```powershell
-cargo test -p ginos-core
-```
-
-### Command-line export
-
-```powershell
-cargo run -p ginos-cli -- export path\to\my-zine.zine --mode imposed --out my-zine-print.pdf
-```
-
-`--mode` is `reader` (spreads for screens) or `imposed` (sheets for printing). For imposed export, `--sheet <size>` picks the sheet; by default it is the sheet of the document's fold format, and a larger sheet switches on bleed and crop marks.
-
----
-
-## Using Gino
-
-1. **New document** → choose a fold format and a page count (rounded to the nearest valid count for that fold).
-2. **Place frames** with the keyboard: `T` text, `I` image, `R` rectangle, `L` rule, `V` select. Every command is also in the command palette (`Ctrl+K`).
-3. **Thread text** by clicking a text frame's out-port, then clicking the next frame.
-4. **Check for the photocopier** with the preview toggles under the canvas.
-5. **Export** → *Imposed for printing* or *Reader spreads*.
-
-### Printing an imposed saddle-stitch booklet at home
-
-Print the imposed PDF double-sided, flipping on the **short edge**, at **100 % / actual size** (never "fit to page"). Stack the sheets in the order they come out, fold the stack in half, and staple on the fold.
-
-If the printer has no automatic double-sided mode, print the odd-numbered pages of the PDF first (the sheet fronts), then reload the paper and print the even-numbered pages (the backs). How to reload depends on the printer, so test with pages 1–4 before printing the whole booklet.
-
-### Fonts
-
-Gino lists the fonts installed in Windows. Fonts that a font manager activates without installing may not appear; add their folders under **Settings → Font folders**. In the style editor, each paragraph style has a Latin font and a Korean font; change either at any time and the whole document reflows.
-
----
+Not done yet: JPG and PNG export, hyphenation, page-number master page, photocopy preview, Windows installer.
 
 ## Document format
 
-A Gino document is a folder ending in `.zine`:
+A zine is a folder ending in `.zine`, holding a human-readable `document.json` (settings, styles, stories, pages, frames) and an `assets` folder. Lengths are in millimetres, type in points. Image paths are relative to the folder.
 
-```
-my-zine.zine\
-  document.json   settings, styles, stories, pages, frames
-  assets\         images and fonts copied by "Collect for print"
-  exports\        last exported PDFs
-```
+## Building from source
 
-`document.json` is plain, human-readable JSON. Lengths are in millimetres; type sizes and leading in points. Text ("stories") is stored separately from the frames it flows through. Image paths are relative to the document folder.
+You need Rust (stable, 1.92 or later), the Microsoft C++ Build Tools ("Desktop development with C++"), the Edge WebView2 Runtime (already on current Windows) and Node.js.
 
----
-
-## Project layout
-
-```
-crates\ginos-core\   document model, layout, imposition, SVG and PDF rendering (no window code)
-crates\ginos-cli\    command-line export and test harness
-src-tauri\           the desktop shell: commands between interface and core
-ui\                  interface: canvas, page strip, inspector
-fixtures\            sample documents and test fonts
-docs\                proposal and design notes
+```powershell
+npm install
+npm run tauri dev       # run with live reload
+npm run tauri build     # release build
+cargo test -p ginos-core
 ```
 
-## Built on
+Export from the command line, without the window:
 
-[Tauri](https://v2.tauri.app/) (desktop shell) · [Parley](https://github.com/linebender/parley) (text layout, with HarfRust shaping and ICU4X line breaking) · [krilla](https://github.com/LaurenzV/krilla) (PDF writing) · [resvg](https://github.com/linebender/resvg) (SVG images) · [image](https://github.com/image-rs/image) (raster images). Each keeps its own licence.
+```powershell
+cargo run -p ginos-cli -- export my-zine.zine --mode imposed --dpi 300 --out my-zine.pdf
+```
 
-## Roadmap
+`--mode` is `reader` or `imposed`; `--sheet` picks a different sheet size.
 
-1. **Text spike** — mixed Korean and English laid out once, threaded across two frames, written identically to SVG and PDF.
-2. **Static canvas** — documents open, frames move and snap, images place, reader-spread PDF exports; Korean input on the canvas tested in a throwaway frame.
-3. **Editable text and imposition** — typing on the canvas with Korean input, threading, styles, imposed PDFs. *First usable version.*
-4. **Finish** — undo and redo, photocopy preview, resolution warnings, collect for print, creep compensation, master page with page numbers, Windows installer.
+## How it is built
 
-## Licence
+The Rust core (`crates/ginos-core`) lays out every glyph once; the same positions are drawn on the canvas and written to the PDF, so the screen does not disagree with the print. The interface (`ui`, Svelte) sends intents and draws what the core returns. `src-tauri` joins the two, and `crates/ginos-cli` is the command-line front end.
+
+Built on [Tauri](https://v2.tauri.app/), [Parley](https://github.com/linebender/parley), [krilla](https://github.com/LaurenzV/krilla), [resvg](https://github.com/linebender/resvg) and [image](https://github.com/image-rs/image). Each keeps its own licence.
 
 Ⓐ
