@@ -99,10 +99,6 @@ comparison concrete.
 
 ## Known gaps and limitations
 
-- The Windows resource compiler cannot handle the apostrophe in the
-  repository folder name `gino's`; `src-tauri\build.rs` copies the window icon
-  to the system temporary folder to work around it. Renaming the clone to
-  `ginos` would remove the workaround.
 - Frames cannot yet be created, deleted, locked or reordered from the window;
   the fixture is edited by hand. Those arrive with milestone 3's tools.
 - Rotation is stored but not drawn.
