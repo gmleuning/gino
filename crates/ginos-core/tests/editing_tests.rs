@@ -395,3 +395,43 @@ fn typing_in_a_long_threaded_story_is_fast() {
     assert!(median < 150.0, "a keystroke took {median:.1} ms");
     let _ = std::fs::remove_dir_all(&parent);
 }
+
+/// The sample imposed on A4 (same size) and A3 (bleed and crop marks),
+/// rendered to PNG in target\imposed for a look by eye.
+#[test]
+fn the_sample_imposes_on_a4_and_a3() {
+    use hayro::hayro_interpret::InterpreterSettings;
+    use hayro::vello_cpu::color::palette::css::WHITE;
+    use hayro::{PixmapSettings, RenderCache, RenderSettings};
+
+    let mut session = open_sample();
+    let folder = common::output_folder("imposed");
+    for (name, sheet, width) in [("a4", None, 297.0), ("a3", Some(Size { width: 420.0, height: 297.0 }), 420.0)] {
+        let path = folder.join(format!("sample-{name}.pdf"));
+        session.export_imposed_pdf(&path, sheet).unwrap();
+        let pdf = Pdf::new(std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(pdf.pages().len(), 4, "two sheets, front and back");
+        let cache = RenderCache::new();
+        let scale = (2.0 * 25.4 / 72.0) as f32;
+        for (index, side) in [(0usize, "sheet-1-front"), (1, "sheet-1-back")] {
+            let pixmap = hayro::render(
+                &pdf.pages()[index],
+                &cache,
+                &InterpreterSettings::default(),
+                &RenderSettings::default(),
+                &PixmapSettings {
+                    x_scale: scale,
+                    y_scale: scale,
+                    bg_color: WHITE,
+                },
+            );
+            let (w, h) = (u32::from(pixmap.width()), u32::from(pixmap.height()));
+            assert!((f64::from(w) - width * 2.0).abs() <= 1.0);
+            let rgba: Vec<u8> = pixmap.data().iter().flat_map(|p| [p.r, p.g, p.b, 255]).collect();
+            image::RgbaImage::from_raw(w, h, rgba)
+                .unwrap()
+                .save(folder.join(format!("sample-{name}-{side}.png")))
+                .unwrap();
+        }
+    }
+}

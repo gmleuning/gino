@@ -1,17 +1,20 @@
-//! Gino's command-line program: the milestone 1 spike, and later export and
-//! debugging dumps.
+//! Gino's command-line program: the milestone 1 spike, PDF export (reader
+//! spreads or imposed sheets) and the fold test sheet.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use ginos_core::compose::compose;
-use ginos_core::export::{reader_pdf, write_pdf};
+use ginos_core::export::{imposed_pdf, reader_pdf, write_pdf};
+use ginos_core::impose::{impose, sheet_mode, SheetMode};
+use ginos_core::model::{Fold, Size};
+use ginos_core::units::paper;
 use ginos_core::images::ImageCache;
 use ginos_core::fonts::{fixture_font_folder, Fonts};
 use ginos_core::render_pdf::scene_to_pdf;
 use ginos_core::render_svg::page_to_svg;
-use ginos_core::spike::{spike_document, SpikeFamilies};
+use ginos_core::spike::{fold_test_document, spike_document, SpikeFamilies};
 use ginos_core::zine::Zine;
 
 #[derive(Parser)]
@@ -39,13 +42,26 @@ enum Command {
         korean_font: Option<PathBuf>,
     },
     /// Exports a .zine folder as a PDF. `--mode reader` writes spreads for
-    /// screens; `--mode imposed` comes with milestone 3.
+    /// screens; `--mode imposed` writes printer sheets.
     Export {
         /// The .zine folder (or its document.json).
         document: PathBuf,
         #[arg(long, default_value = "reader")]
         mode: String,
-        /// Sheet size for imposed export (milestone 3).
+        /// Sheet for imposed export: A3, A4, A5, A6 or a size such as 320x450
+        /// (millimetres). Default: the document's sheet. A sheet larger than
+        /// the imposed pages adds bleed and crop marks.
+        #[arg(long)]
+        sheet: Option<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Writes an imposed test sheet with large page numbers, to print, cut
+    /// and fold to check a fold's page order.
+    FoldTest {
+        /// eight-page, a5 (A5 saddle-stitch on A4) or a6 (A6 on A5).
+        #[arg(long, default_value = "eight-page")]
+        fold: String,
         #[arg(long)]
         sheet: Option<String>,
         #[arg(long)]
@@ -67,6 +83,7 @@ fn main() -> ExitCode {
             sheet,
             out,
         } => export(&document, &mode, sheet.as_deref(), &out),
+        Command::FoldTest { fold, sheet, out } => fold_test(&fold, sheet.as_deref(), &out),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -142,23 +159,50 @@ fn spike(out: &Path, latin_font: Option<PathBuf>, korean_font: Option<PathBuf>) 
     Ok(())
 }
 
+/// Reads a sheet size: A3, A4, A5 or A6, or a width and height in
+/// millimetres such as `320x450`.
+fn parse_sheet(text: &str) -> Result<Size, String> {
+    let named = |(width, height): (f64, f64)| Size { width, height };
+    match text.trim().to_ascii_uppercase().as_str() {
+        "A3" => return Ok(named(paper::A3)),
+        "A4" => return Ok(named(paper::A4)),
+        "A5" => return Ok(named(paper::A5)),
+        "A6" => return Ok(named(paper::A6)),
+        _ => {}
+    }
+    let parts: Vec<&str> = text.split(['x', 'X', '×']).collect();
+    if let [width, height] = parts.as_slice() {
+        if let (Ok(width), Ok(height)) = (width.trim().parse::<f64>(), height.trim().parse::<f64>()) {
+            if width > 0.0 && height > 0.0 {
+                return Ok(Size { width, height });
+            }
+        }
+    }
+    Err(format!("\"{text}\" is not a sheet size; use A3, A4, A5, A6 or a size in millimetres such as 320x450"))
+}
+
 fn export(document: &Path, mode: &str, sheet: Option<&str>, out: &Path) -> Result<(), String> {
-    if mode != "reader" {
-        return Err(format!(
-            "export mode \"{mode}\" is not available yet; milestone 3 adds \"imposed\"."
-        ));
+    let imposed = match mode {
+        "reader" => false,
+        "imposed" => true,
+        other => return Err(format!("export mode \"{other}\" does not exist; use reader or imposed")),
+    };
+    if sheet.is_some() && !imposed {
+        return Err("--sheet applies to imposed export only".to_owned());
     }
-    if sheet.is_some() {
-        return Err("--sheet applies to imposed export, which comes with milestone 3.".to_owned());
-    }
+    let sheet = sheet.map(parse_sheet).transpose()?;
     let zine = Zine::open(document).map_err(|error| error.to_string())?;
     let mut fonts = Fonts::with_system_fonts();
     for folder in zine.font_folders() {
         fonts.add_folder(&folder);
     }
     let mut images = ImageCache::new(&zine.folder);
-    let (pdf, composition) =
-        reader_pdf(&mut fonts, &mut images, &zine.document).map_err(|error| error.to_string())?;
+    let (pdf, composition) = if imposed {
+        imposed_pdf(&mut fonts, &mut images, &zine.document, sheet)
+    } else {
+        reader_pdf(&mut fonts, &mut images, &zine.document)
+    }
+    .map_err(|error| error.to_string())?;
     for overflow in &composition.overflows {
         println!(
             "Warning: story \"{}\" overflows its frames by {} characters.",
@@ -169,7 +213,56 @@ fn export(document: &Path, mode: &str, sheet: Option<&str>, out: &Path) -> Resul
         println!("Warning: page {} frame \"{}\": {}", problem.page + 1, problem.frame, problem.message);
     }
     write_pdf(out, &pdf).map_err(|error| error.to_string())?;
-    let spreads = ginos_core::spreads::reader_spreads(zine.document.pages.len()).len();
-    println!("Wrote {} ({spreads} spreads)", out.display());
+    if imposed {
+        let sheet = ginos_core::impose::landscape(sheet.unwrap_or(zine.document.document.sheet));
+        let mode = sheet_mode(&zine.document, sheet).map_err(|error| error.to_string())?;
+        let sides = impose(&zine.document, sheet).map_err(|error| error.to_string())?.len();
+        let mode = match mode {
+            SheetMode::SameSize => "same-size sheet, no bleed or crop marks",
+            SheetMode::Oversize => "larger sheet, with bleed and crop marks",
+        };
+        println!("Wrote {} ({sides} sheet sides on {} by {} mm, {mode})", out.display(), sheet.width, sheet.height);
+        if sides > 1 {
+            println!("Print double-sided, flipping on the short edge.");
+        }
+    } else {
+        let spreads = ginos_core::spreads::reader_spreads(zine.document.pages.len()).len();
+        println!("Wrote {} ({spreads} spreads)", out.display());
+    }
+    Ok(())
+}
+
+fn fold_test(fold: &str, sheet: Option<&str>, out: &Path) -> Result<(), String> {
+    let (fold, pages) = match fold {
+        "eight-page" => (Fold::EightPageFold, 8),
+        "a5" => (Fold::SaddleA5OnA4, 8),
+        "a6" => (Fold::SaddleA6OnA5, 8),
+        other => return Err(format!("fold \"{other}\" does not exist; use eight-page, a5 or a6")),
+    };
+    let sheet = sheet.map(parse_sheet).transpose()?;
+    let mut fonts = Fonts::with_system_fonts();
+    let latin = fonts
+        .add_file(&default_font("GT-UCLA-CINETYPE-REGULAR.OTF", "CrimsonText-Regular.ttf"))
+        .map_err(|error| error.to_string())?;
+    let korean = fonts
+        .add_file(&default_font("GOWUNDODUM-REGULAR.TTF", "GowunDodum-Regular.ttf"))
+        .map_err(|error| error.to_string())?;
+    let families = SpikeFamilies {
+        latin: latin[0].clone(),
+        korean: korean[0].clone(),
+    };
+    let document = fold_test_document(&families, fold, pages).map_err(|error| error.to_string())?;
+    let mut images = ImageCache::new(Path::new("."));
+    let (pdf, _) = imposed_pdf(&mut fonts, &mut images, &document, sheet).map_err(|error| error.to_string())?;
+    write_pdf(out, &pdf).map_err(|error| error.to_string())?;
+    println!("Wrote {}", out.display());
+    match fold {
+        Fold::EightPageFold => println!(
+            "Print one side at 100 % (actual size), cut the slit and fold. The pages must read 1 to 8 upright."
+        ),
+        _ => println!(
+            "Print double-sided, flipping on the short edge, at 100 % (actual size). Fold, nest and staple: pages 1 to 8 upright."
+        ),
+    }
     Ok(())
 }

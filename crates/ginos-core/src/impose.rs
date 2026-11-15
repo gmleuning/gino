@@ -91,6 +91,7 @@ pub fn footprint(fold: Fold, trim: Size) -> Size {
 /// Whether a sheet is the size of the imposed pages or larger, or an error
 /// when the pages do not fit on it.
 pub fn sheet_mode(document: &Document, sheet: Size) -> Result<SheetMode, Error> {
+    let sheet = landscape(sheet);
     let settings = &document.document;
     let needed = footprint(settings.fold, settings.trim);
     // Up to a millimetre over is allowed: two A5 pages are 296 mm wide on a
@@ -110,6 +111,14 @@ pub fn sheet_mode(document: &Document, sheet: Size) -> Result<SheetMode, Error> 
         Ok(SheetMode::Oversize)
     } else {
         Ok(SheetMode::SameSize)
+    }
+}
+
+/// Sheets are laid out landscape: the longer side is the width.
+pub fn landscape(sheet: Size) -> Size {
+    Size {
+        width: sheet.width.max(sheet.height),
+        height: sheet.width.min(sheet.height),
     }
 }
 
@@ -142,14 +151,7 @@ pub struct SheetSide {
 /// Lays the document's pages out on sheet sides, front then back of each
 /// sheet. The sheet is landscape: the longer side is its width.
 pub fn impose(document: &Document, sheet: Size) -> Result<Vec<SheetSide>, Error> {
-    let sheet = if sheet.height > sheet.width {
-        Size {
-            width: sheet.height,
-            height: sheet.width,
-        }
-    } else {
-        sheet
-    };
+    let sheet = landscape(sheet);
     let mode = sheet_mode(document, sheet)?;
     let settings = &document.document;
     let trim = settings.trim;
