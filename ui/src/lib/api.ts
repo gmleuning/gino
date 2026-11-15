@@ -214,8 +214,16 @@ export interface NewDocument {
   starter_frames: boolean;
 }
 
-export interface Preferences {
-  starter_frames: boolean;
+/** Stored as the interface saved them; prefs.svelte.ts owns their shape. */
+export type StoredPreferences = Record<string, unknown>;
+
+export interface ImageInfo {
+  path: string;
+  pixel_width: number;
+  pixel_height: number;
+  stated_dpi: number | null;
+  effective_dpi: number;
+  thumbnail: string;
 }
 
 export interface FoldDefaults {
@@ -277,13 +285,15 @@ export const api = {
   undo: () => invoke<Update>("undo"),
   redo: () => invoke<Update>("redo"),
   save: () => invoke<Update>("save_document"),
-  exportReader: (path: string | null) => invoke<ExportResult>("export_reader", { path }),
-  exportImposed: (path: string, sheet: Size | null) => invoke<ExportResult>("export_imposed", { path, sheet }),
-  exportPage: (path: string, page: number) => invoke<ExportResult>("export_page", { path, page }),
-  exportPaged: (path: string) => invoke<ExportResult>("export_paged", { path }),
+  exportReader: (path: string | null, dpi: number | null) => invoke<ExportResult>("export_reader", { path, dpi }),
+  exportImposed: (path: string, sheet: Size | null, dpi: number | null) =>
+    invoke<ExportResult>("export_imposed", { path, sheet, dpi }),
+  exportPage: (path: string, page: number, dpi: number | null) => invoke<ExportResult>("export_page", { path, page, dpi }),
+  exportPaged: (path: string, dpi: number | null) => invoke<ExportResult>("export_paged", { path, dpi }),
+  imageInfo: (page: number, frameId: string) => invoke<ImageInfo>("image_info", { page, frameId }),
   openInDefaultApp: (path: string) => invoke<void>("open_in_default_app", { path }),
-  getPreferences: () => invoke<Preferences>("get_preferences"),
-  setPreferences: (preferences: Preferences) => invoke<void>("set_preferences", { preferences }),
+  getPreferences: () => invoke<StoredPreferences>("get_preferences"),
+  setPreferences: (preferences: StoredPreferences | object) => invoke<void>("set_preferences", { preferences }),
   defaultExportPath: (suffix: string) => invoke<string>("default_export_path", { suffix }),
   fontFamilies: () => invoke<string[]>("font_families"),
 };

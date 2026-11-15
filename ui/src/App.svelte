@@ -1,34 +1,49 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { api, type Size, type Tool } from "./lib/api";
   import { app, run } from "./lib/state.svelte";
+  import { prefs, watchSystemTheme } from "./lib/prefs.svelte";
+  import { belongsToTextField, comboOf, describe, isPlain, type CommandId } from "./lib/commands";
   import PageStrip from "./lib/PageStrip.svelte";
   import Canvas from "./lib/Canvas.svelte";
   import Inspector from "./lib/Inspector.svelte";
   import NewDocument from "./lib/NewDocument.svelte";
-  import MenuBar, { type Menu } from "./lib/MenuBar.svelte";
+  import PreferencesDialog from "./lib/PreferencesDialog.svelte";
+  import MenuBar, { type Menu, type MenuItem } from "./lib/MenuBar.svelte";
+
+  type PrintMode = "paged" | "viewed" | "folded";
 
   let canvas: Canvas | undefined = $state();
   let showNew = $state(false);
   let showPrint = $state(false);
-  let showPreferences = $state(false);
-  let starterFrames = $state(true);
-  let printMode = $state<"paged" | "viewed" | "folded">("paged");
+  let preferencesTab = $state<"general" | "new" | "shortcuts" | null>(null);
+  let printMode = $state<PrintMode>("paged");
   let printing = $state(false);
   let printSheet = $state<"document" | "a3" | "a4" | "custom">("document");
   let customSheet = $state<Size>({ width: 320, height: 450 });
-  let showPages = $state(true);
-  let showPanel = $state(true);
-  let showShortcuts = $state(false);
+  let printDpi = $state(300);
   let showExportPage = $state(false);
   let exportPageNumber = $state(1);
 
-  const tools: { tool: Tool; label: string; key: string }[] = [
-    { tool: "select", label: "Select", key: "V" },
-    { tool: "text", label: "Text", key: "T" },
-    { tool: "image", label: "Image", key: "I" },
-    { tool: "rule", label: "Line", key: "L" },
+  const tools: { tool: Tool; label: string; command: CommandId }[] = [
+    { tool: "select", label: "Select", command: "toolSelect" },
+    { tool: "text", label: "Text", command: "toolText" },
+    { tool: "image", label: "Image", command: "toolImage" },
+    { tool: "rule", label: "Line", command: "toolLine" },
   ];
+
+  onMount(async () => {
+    const loaded = await prefs.load();
+    watchSystemTheme();
+    app.showGuides = loaded.show_guides;
+    app.showCropMarks = loaded.show_crop_marks;
+    app.showOutlines = loaded.show_outlines;
+    app.showBleed = loaded.show_bleed;
+    app.showPages = loaded.show_pages;
+    app.showPanel = loaded.show_panel;
+    loadFonts();
+  });
 
   async function loadFonts() {
     try {
@@ -71,7 +86,11 @@
       : "";
   }
 
+  /** The preference's resolution, or null to keep every pixel. */
+  const preferredDpi = () => (prefs.current.print_dpi > 0 ? prefs.current.print_dpi : null);
+
   async function exportReader() {
+    if (!app.view) return;
     try {
       const suggested = await api.defaultExportPath("reader");
       const target = await save({
@@ -80,7 +99,7 @@
         filters: [{ name: "PDF", extensions: ["pdf"] }],
       });
       if (!target) return;
-      const result = await api.exportReader(target);
+      const result = await api.exportReader(target, preferredDpi());
       app.say(`Exported ${result.path}.${overflowWarning(result.overflows)}`);
     } catch (error) {
       app.say(String(error));
@@ -91,6 +110,12 @@
   function currentPage(): number {
     if (app.selection) return app.selection.page;
     return app.view?.spreads[app.currentSpread]?.pages[0]?.[0] ?? 0;
+  }
+
+  function openExportPage() {
+    if (!app.view) return;
+    exportPageNumber = currentPage() + 1;
+    showExportPage = true;
   }
 
   async function exportPage() {
@@ -104,104 +129,110 @@
       });
       if (!target) return;
       showExportPage = false;
-      const result = await api.exportPage(target, page);
+      const result = await api.exportPage(target, page, preferredDpi());
       app.say(`Exported ${result.path}.`);
     } catch (error) {
       app.say(String(error));
     }
   }
 
-  function openPrint(mode: "paged" | "viewed" | "folded") {
+  function openPrint(mode: PrintMode) {
+    if (!app.view) return;
     printMode = mode;
+    printDpi = prefs.current.print_dpi;
     showPrint = true;
   }
 
-  const saveDocument = () => run(api.save).then((update) => update && app.say("Saved"));
+  const saveDocument = () => {
+    if (app.view) run(api.save).then((update) => update && app.say("Saved"));
+  };
+
+  function setTool(tool: Tool) {
+    app.tool = tool;
+    canvas?.focus();
+  }
+
+  /** What each command does. The menus and the shortcut keys both run these. */
+  const actions: Record<CommandId, () => void> = {
+    new: () => (showNew = true),
+    open: () => openDocument(),
+    save: saveDocument,
+    undo: () => app.view && run(api.undo),
+    redo: () => app.view && run(api.redo),
+    exportReader,
+    exportPage: openExportPage,
+    shortcuts: () => (preferencesTab = "shortcuts"),
+    preferences: () => (preferencesTab = "general"),
+    toggleGuides: () => (app.showGuides = !app.showGuides),
+    toggleCropMarks: () => (app.showCropMarks = !app.showCropMarks),
+    toggleOutlines: () => (app.showOutlines = !app.showOutlines),
+    toggleBleed: () => (app.showBleed = !app.showBleed),
+    togglePages: () => (app.showPages = !app.showPages),
+    togglePanel: () => (app.showPanel = !app.showPanel),
+    zoomIn: () => canvas?.zoomBy(1.25),
+    zoomOut: () => canvas?.zoomBy(1 / 1.25),
+    fit: () => canvas?.fit(),
+    printPaged: () => openPrint("paged"),
+    printViewed: () => openPrint("viewed"),
+    printFolded: () => openPrint("folded"),
+    toolSelect: () => setTool("select"),
+    toolText: () => setTool("text"),
+    toolImage: () => setTool("image"),
+    toolLine: () => setTool("rule"),
+  };
+
+  /** A menu item for a command, showing its first shortcut. */
+  function item(id: CommandId, label: string, extra: Partial<MenuItem> = {}): MenuItem {
+    const keys = prefs.current.shortcuts[id] ?? [];
+    return { label, shortcut: keys[0] ? describe(keys[0]) : undefined, action: actions[id], ...extra };
+  }
 
   const menus: Menu[] = $derived([
     {
       label: "File",
-      items: [
-        { label: "New…", shortcut: "Ctrl+N", action: () => (showNew = true) },
-        { label: "Open…", shortcut: "Ctrl+O", action: () => openDocument() },
-        { label: "Save", shortcut: "Ctrl+S", action: saveDocument, disabled: !app.view },
-      ],
+      items: [item("new", "New…"), item("open", "Open…"), item("save", "Save", { disabled: !app.view })],
     },
     {
       label: "Edit",
       items: [
-        { label: "Save", shortcut: "Ctrl+S", action: saveDocument, disabled: !app.view },
+        item("save", "Save", { disabled: !app.view }),
         { separator: true },
-        { label: "Undo", shortcut: "Ctrl+Z", action: () => run(api.undo), disabled: !app.canUndo },
-        { label: "Redo", shortcut: "Ctrl+Y", action: () => run(api.redo), disabled: !app.canRedo },
+        item("undo", "Undo", { disabled: !app.canUndo }),
+        item("redo", "Redo", { disabled: !app.canRedo }),
         { separator: true },
         {
           label: "Export",
           disabled: !app.view,
-          submenu: [
-            { label: "Reader spreads…", shortcut: "Ctrl+E", action: exportReader },
-            {
-              label: "Single page…",
-              action: () => {
-                exportPageNumber = currentPage() + 1;
-                showExportPage = true;
-              },
-            },
-          ],
+          submenu: [item("exportReader", "Reader spreads…"), item("exportPage", "Single page…")],
         },
         { separator: true },
-        { label: "Shortcut keys", action: () => (showShortcuts = true) },
-        { label: "Preferences…", shortcut: "Ctrl+,", action: openPreferences },
+        item("shortcuts", "Shortcut keys…"),
+        item("preferences", "Preferences…"),
       ],
     },
     {
       label: "View",
       items: [
-        { label: "Guides", shortcut: "Ctrl+;", checked: app.showGuides, action: () => (app.showGuides = !app.showGuides) },
-        { label: "Crop marks", checked: app.showCropMarks, action: () => (app.showCropMarks = !app.showCropMarks) },
-        { label: "Frame outlines", checked: app.showOutlines, action: () => (app.showOutlines = !app.showOutlines) },
-        { label: "Bleed", checked: app.showBleed, action: () => (app.showBleed = !app.showBleed) },
+        item("toggleGuides", "Guides", { checked: app.showGuides }),
+        item("toggleCropMarks", "Crop marks", { checked: app.showCropMarks }),
+        item("toggleOutlines", "Frame outlines", { checked: app.showOutlines }),
+        item("toggleBleed", "Bleed", { checked: app.showBleed }),
         { separator: true },
-        { label: "Pages", checked: showPages, action: () => (showPages = !showPages) },
-        { label: "Document panel", checked: showPanel, action: () => (showPanel = !showPanel) },
+        item("togglePages", "Pages", { checked: app.showPages }),
+        item("togglePanel", "Document panel", { checked: app.showPanel }),
         { separator: true },
-        { label: "Zoom in", shortcut: "Ctrl+=", action: () => canvas?.zoomBy(1.25), disabled: !app.view },
-        { label: "Zoom out", shortcut: "Ctrl+-", action: () => canvas?.zoomBy(1 / 1.25), disabled: !app.view },
-        { label: "Fit", shortcut: "Ctrl+0", action: () => canvas?.fit(), disabled: !app.view },
+        item("zoomIn", "Zoom in", { disabled: !app.view }),
+        item("zoomOut", "Zoom out", { disabled: !app.view }),
+        item("fit", "Fit", { disabled: !app.view }),
         { separator: true },
         {
           label: "Print",
           disabled: !app.view,
-          submenu: [
-            { label: "Paged…", shortcut: "Ctrl+P", action: () => openPrint("paged") },
-            { label: "Viewed…", action: () => openPrint("viewed") },
-            { label: "Folded…", action: () => openPrint("folded") },
-          ],
+          submenu: [item("printPaged", "Paged…"), item("printViewed", "Viewed…"), item("printFolded", "Folded…")],
         },
       ],
     },
   ]);
-
-  const shortcuts: [string, string][] = [
-    ["Ctrl+N", "New zine"],
-    ["Ctrl+O", "Open"],
-    ["Ctrl+S", "Save"],
-    ["Ctrl+Z / Ctrl+Y", "Undo / redo (Ctrl+Shift+Z also redoes)"],
-    ["Ctrl+E", "Export reader spreads"],
-    ["Ctrl+P", "Print"],
-    ["Ctrl+,", "Preferences"],
-    ["Ctrl+;", "Show or hide guides"],
-    ["Ctrl+= / Ctrl+- / Ctrl+0", "Zoom in / out / fit (Ctrl+wheel zooms too)"],
-    ["V T I L", "Select, text, image and line tools"],
-    ["Drag", "Move a frame; drag a handle to resize"],
-    ["Double-click", "Type in a text frame (Enter does the same for a selected frame)"],
-    ["Arrows", "Move the selected frame 0.5 mm, with Shift 5 mm"],
-    ["Delete", "Delete the selected frame"],
-    ["Page Up / Page Down", "Previous / next spread"],
-    ["Escape", "Stop typing, cancel threading, or deselect"],
-    ["While typing", "Arrows, Home, End move; Shift selects; Ctrl jumps by word or to the story's ends"],
-    ["While typing", "Ctrl+A selects the story; Ctrl+Backspace deletes a word"],
-  ];
 
   function chosenPrintSheet(): Size | null {
     switch (printSheet) {
@@ -220,17 +251,17 @@
   async function print() {
     printing = true;
     try {
+      const dpi = printDpi > 0 ? printDpi : null;
       const path = await api.defaultExportPath(`print-${printMode}`);
       const result =
         printMode === "paged"
-          ? await api.exportPaged(path)
+          ? await api.exportPaged(path, dpi)
           : printMode === "viewed"
-            ? await api.exportReader(path)
-            : await api.exportImposed(path, chosenPrintSheet());
+            ? await api.exportReader(path, dpi)
+            : await api.exportImposed(path, chosenPrintSheet(), dpi);
       showPrint = false;
       await api.openInDefaultApp(result.path);
-      const how =
-        printMode === "folded" ? " Print double-sided, flipping on the short edge." : "";
+      const how = printMode === "folded" ? " Print double-sided, flipping on the short edge." : "";
       app.say(`Opened ${result.path} to print.${how}${overflowWarning(result.overflows)}`);
     } catch (error) {
       app.say(String(error));
@@ -239,65 +270,26 @@
     }
   }
 
-  async function openPreferences() {
-    try {
-      starterFrames = (await api.getPreferences()).starter_frames;
-    } catch {
-      starterFrames = true;
-    }
-    showPreferences = true;
-  }
+  const anyDialog = $derived(showNew || showPrint || showExportPage || preferencesTab !== null);
 
-  async function savePreferences() {
-    try {
-      await api.setPreferences({ starter_frames: starterFrames });
-      showPreferences = false;
-    } catch (error) {
-      app.say(String(error));
-    }
-  }
-
+  /**
+   * Shortcut keys. A key a text field or the text being typed has already
+   * used (the canvas marks those as handled) is left alone; so are keys that
+   * edit text inside a field, and single keys while typing.
+   */
   function onKeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.repeat && !event.ctrlKey) return;
+    const combo = comboOf(event);
+    if (!combo) return;
+    const id = prefs.commandFor(combo);
+    if (!id) return;
     const target = event.target as HTMLElement;
-    const inField = target?.matches?.("input, textarea, select, [contenteditable]");
-    const key = event.key.toLowerCase();
-    if (event.ctrlKey && key === "o") {
-      event.preventDefault();
-      openDocument();
-    } else if (event.ctrlKey && key === "n") {
-      event.preventDefault();
-      showNew = true;
-    } else if (event.ctrlKey && key === "s" && app.view) {
-      event.preventDefault();
-      run(api.save).then(() => app.say("Saved"));
-    } else if (event.ctrlKey && key === "z" && app.view && !inField) {
-      event.preventDefault();
-      run(event.shiftKey ? api.redo : api.undo);
-    } else if (event.ctrlKey && key === "y" && app.view && !inField) {
-      event.preventDefault();
-      run(api.redo);
-    } else if (event.ctrlKey && key === "e" && app.view) {
-      event.preventDefault();
-      exportReader();
-    } else if (event.ctrlKey && key === "p" && app.view) {
-      event.preventDefault();
-      openPrint("paged");
-    } else if (event.ctrlKey && key === ",") {
-      event.preventDefault();
-      openPreferences();
-    } else if (event.ctrlKey && key === ";") {
-      event.preventDefault();
-      app.showGuides = !app.showGuides;
-    } else if (event.ctrlKey && (key === "=" || key === "+") && app.view) {
-      event.preventDefault();
-      canvas?.zoomBy(1.25);
-    } else if (event.ctrlKey && key === "-" && app.view) {
-      event.preventDefault();
-      canvas?.zoomBy(1 / 1.25);
-    } else if (event.ctrlKey && key === "0" && app.view) {
-      event.preventDefault();
-      canvas?.fit();
-    }
+    const inField = !!target?.matches?.("input, textarea, select, [contenteditable]");
+    if (inField && (isPlain(combo) || belongsToTextField(combo))) return;
+    if (app.text && isPlain(combo)) return;
+    if (anyDialog && id !== "new" && id !== "open") return;
+    event.preventDefault();
+    actions[id]();
   }
 </script>
 
@@ -305,20 +297,18 @@
 
 <div
   class="layout"
-  style:grid-template-columns={`${showPages ? "180px " : ""}1fr${showPanel ? " auto" : ""}`}
+  style:grid-template-columns={`${app.showPages ? "180px " : ""}1fr${app.showPanel ? " auto" : ""}`}
 >
   <div class="topbar">
     <MenuBar {menus} />
     {#if app.view}
       <div class="tools" role="toolbar" aria-label="Tools">
         {#each tools as entry}
+          {@const key = prefs.current.shortcuts[entry.command]?.[0]}
           <button
             class:active={app.tool === entry.tool}
-            title={`${entry.label} (${entry.key})`}
-            onclick={() => {
-              app.tool = entry.tool;
-              canvas?.focus();
-            }}>{entry.label}</button
+            title={key ? `${entry.label} (${describe(key)})` : entry.label}
+            onclick={() => setTool(entry.tool)}>{entry.label}</button
           >
         {/each}
       </div>
@@ -326,7 +316,7 @@
     <span class="spacer"></span>
   </div>
 
-  {#if showPages}
+  {#if app.showPages}
     <aside class="strip">
       <PageStrip />
     </aside>
@@ -346,7 +336,7 @@
     {/if}
   </main>
 
-  {#if showPanel}
+  {#if app.showPanel}
     <aside class="inspector">
       <Inspector />
     </aside>
@@ -387,8 +377,17 @@
         <input type="radio" bind:group={printMode} value="folded" />
         <span>Folded<small>Pages in folding order, to print double-sided (flip on the short edge), fold and staple.</small></span>
       </label>
-      {#if printMode === "folded"}
-        <div class="grid" style="margin-top: 6px;">
+      <div class="grid" style="margin-top: 6px;">
+        <label>
+          Image resolution
+          <select bind:value={printDpi}>
+            <option value={150}>150 dpi</option>
+            <option value={300}>300 dpi</option>
+            <option value={600}>600 dpi</option>
+            <option value={0}>Keep every pixel</option>
+          </select>
+        </label>
+        {#if printMode === "folded"}
           <label class="wide">
             Sheet
             <select bind:value={printSheet}>
@@ -404,7 +403,10 @@
             <label>Width (mm)<input type="number" min="50" step="1" bind:value={customSheet.width} /></label>
             <label>Height (mm)<input type="number" min="50" step="1" bind:value={customSheet.height} /></label>
           {/if}
-        </div>
+        {/if}
+      </div>
+      <div class="note">Pictures finer than the resolution are reduced to it; coarser ones are left as they are. Text and lines are always sharp.</div>
+      {#if printMode === "folded"}
         <div class="note">A sheet larger than the imposed pages gets bleed, crop marks and creep; a same-size sheet gets neither.</div>
       {/if}
       <div class="note">The PDF is saved in the .zine folder and opens in your PDF viewer, where you print it.</div>
@@ -416,21 +418,8 @@
   </div>
 {/if}
 
-{#if showPreferences}
-  <div class="modal-backdrop" role="presentation">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Preferences">
-      <h2>Preferences</h2>
-      <label class="check-row">
-        <input type="checkbox" checked={!starterFrames} onchange={(e) => (starterFrames = !(e.target as HTMLInputElement).checked)} />
-        Start new zines with no image or text frames
-      </label>
-      <div class="note">Off (the default): new zines get an image frame on the front and back covers, a blank inside front cover, and one text story threaded through the pages after it.</div>
-      <div class="actions">
-        <button onclick={() => (showPreferences = false)}>Cancel</button>
-        <button onclick={savePreferences}>Save</button>
-      </div>
-    </div>
-  </div>
+{#if preferencesTab}
+  <PreferencesDialog tab={preferencesTab} onclose={() => (preferencesTab = null)} />
 {/if}
 
 {#if showExportPage && app.view}
@@ -447,24 +436,6 @@
       <div class="actions">
         <button onclick={() => (showExportPage = false)}>Cancel</button>
         <button onclick={exportPage} disabled={exportPageNumber < 1 || exportPageNumber > app.view.pages.length}>Choose where to save…</button>
-      </div>
-    </div>
-  </div>
-{/if}
-
-{#if showShortcuts}
-  <div class="modal-backdrop" role="presentation">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Shortcut keys">
-      <h2>Shortcut keys</h2>
-      <table class="shortcuts">
-        <tbody>
-          {#each shortcuts as [keys, what]}
-            <tr><td><kbd>{keys}</kbd></td><td>{what}</td></tr>
-          {/each}
-        </tbody>
-      </table>
-      <div class="actions">
-        <button onclick={() => (showShortcuts = false)}>Close</button>
       </div>
     </div>
   </div>

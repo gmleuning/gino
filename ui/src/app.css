@@ -7,9 +7,29 @@
   --accent: #2f6fd6;
   --warn: #b3261e;
   --panel: #f7f5f0;
-  font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
-  font-size: 13px;
+  --field: #ffffff;
+  --hover: #e4e0d6;
+  --backdrop: rgba(30, 30, 30, 0.35);
+  --ui-font: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  --ui-size: 13px;
+  font-family: var(--ui-font);
+  font-size: var(--ui-size);
   color: var(--ink);
+}
+
+/* The page itself stays paper-white; only the program around it darkens. */
+:root[data-theme="dark"] {
+  --desk: #1c1c1b;
+  --ink: #e8e6e1;
+  --muted: #9d9a93;
+  --line: #3a3936;
+  --accent: #5b8def;
+  --warn: #f2786d;
+  --panel: #262624;
+  --field: #2f2e2c;
+  --hover: #34332f;
+  --backdrop: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
 }
 
 * {
@@ -30,7 +50,7 @@ button {
   padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
   cursor: pointer;
 }
@@ -51,7 +71,7 @@ select {
   padding: 3px 6px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
+  background: var(--field);
   width: 100%;
 }
 
@@ -265,7 +285,7 @@ select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(30, 30, 30, 0.35);
+  background: var(--backdrop);
   display: grid;
   place-items: center;
   z-index: 20;
@@ -386,7 +406,7 @@ select {
 
 .menubar .menu-title:hover,
 .menubar .menu-title.open {
-  background: #e4e0d6;
+  background: var(--hover);
 }
 
 .menubar .dropdown {
@@ -394,7 +414,7 @@ select {
   top: 100%;
   left: 0;
   min-width: 230px;
-  background: #fff;
+  background: var(--field);
   border: 1px solid var(--line);
   border-radius: 0 0 6px 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
@@ -449,20 +469,137 @@ select {
   margin: 4px 0;
 }
 
-.modal table.shortcuts {
+.modal.prefs {
+  width: 560px;
+}
+
+.modal h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+
+.modal .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.modal .tabs button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.modal .tabs button.active {
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.modal .actions {
+  align-items: center;
+}
+
+.modal .row-actions {
+  margin-top: 10px;
+}
+
+.modal table.shortcut-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-.modal table.shortcuts td {
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
+.modal table.shortcut-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 12px 6px 4px;
 }
 
-.modal table.shortcuts kbd {
-  font-family: inherit;
-  white-space: nowrap;
+.modal table.shortcut-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.modal table.shortcut-table td.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  color: var(--muted);
+}
+
+.modal .key {
+  display: inline-flex;
+}
+
+.modal .key button {
+  padding: 1px 8px;
+  border-radius: 4px 0 0 4px;
   font-weight: 600;
+}
+
+.modal .key button.remove {
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  padding: 1px 6px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.modal button.add {
+  padding: 1px 8px;
+}
+
+.modal button.recording {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.inspector figure.original {
+  margin: 10px 0 0;
+}
+
+.inspector figure.original img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.inspector figure.original figcaption {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.inspector dl.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.inspector dl.facts dt {
+  color: var(--muted);
+}
+
+.inspector dl.facts dd {
+  margin: 0;
+}
+
+.inspector dl.facts dd.warn {
+  color: var(--warn);
 }

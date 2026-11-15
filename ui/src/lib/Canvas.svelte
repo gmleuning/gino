@@ -6,7 +6,7 @@
   // caret, so the Korean input method composes there and its candidate
   // window opens next to the caret.
 
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { api, type Motion, type Tool, type Update } from "./api";
   import { app, frameKey, run } from "./state.svelte";
   import { fragment } from "./svg";
@@ -47,27 +47,36 @@
     return count;
   }
 
-  /** Crop marks at the spread's corners and at each spine, as path data. */
+  /**
+   * Crop marks at the four corners of each page's text area (inside the
+   * margins), as path data in spread millimetres. Even page numbers are
+   * left-hand pages, whose outside margin is on the left.
+   */
   const cropMarks = $derived.by(() => {
-    if (!spread) return "";
-    const w = spread.width;
-    const h = spread.height;
+    if (!spread || !app.view) return "";
+    const margins = app.view.settings.margins;
     const g = MARK_GAP;
     const l = MARK_LENGTH;
     const parts: string[] = [];
-    for (const [x, dx] of [
-      [0, -1],
-      [w, 1],
-    ]) {
-      for (const [y, dy] of [
-        [0, -1],
-        [h, 1],
+    for (const [pageIndex, offset] of spread.pages) {
+      const page = app.view.pages[pageIndex];
+      if (!page) continue;
+      const leftPage = (pageIndex + 1) % 2 === 0;
+      const left = offset + (leftPage ? margins.outside : margins.inside);
+      const right = offset + page.width - (leftPage ? margins.inside : margins.outside);
+      const top = margins.top;
+      const bottom = page.height - margins.bottom;
+      for (const [x, dx] of [
+        [left, -1],
+        [right, 1],
       ]) {
-        parts.push(`M ${x + dx * g} ${y} h ${dx * l}`, `M ${x} ${y + dy * g} v ${dy * l}`);
+        for (const [y, dy] of [
+          [top, -1],
+          [bottom, 1],
+        ]) {
+          parts.push(`M ${x + dx * g} ${y} h ${dx * l}`, `M ${x} ${y + dy * g} v ${dy * l}`);
+        }
       }
-    }
-    for (const [, offset] of spread.pages.slice(1)) {
-      parts.push(`M ${offset} ${-g} v ${-l}`, `M ${offset} ${h + g} v ${l}`);
     }
     return parts.join(" ");
   });
@@ -191,17 +200,13 @@
     zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
   }
 
-  const toolKeys: Record<string, Tool> = { v: "select", t: "text", i: "image", l: "rule" };
-
   /** Keys while frames, not text, have the focus. */
   async function onKeyDown(event: KeyboardEvent) {
     if (!app.view || event.target !== wrapper) return;
+    // Ctrl and Alt combinations are shortcut keys, handled by the window.
+    if (event.ctrlKey || event.altKey) return;
     const step = event.shiftKey ? NUDGE_LARGE_MM : NUDGE_MM;
     const key = event.key;
-    if (!event.ctrlKey && !event.altKey && toolKeys[key.toLowerCase()]) {
-      app.tool = toolKeys[key.toLowerCase()];
-      return;
-    }
     switch (key) {
       case "ArrowLeft":
         event.preventDefault();
@@ -249,11 +254,11 @@
         break;
       case "PageDown":
         event.preventDefault();
-        app.currentSpread = Math.min(app.currentSpread + 1, app.view.spreads.length - 1);
+        await app.goToSpread(app.currentSpread + 1);
         break;
       case "PageUp":
         event.preventDefault();
-        app.currentSpread = Math.max(app.currentSpread - 1, 0);
+        await app.goToSpread(app.currentSpread - 1);
         break;
     }
   }
@@ -384,12 +389,15 @@
   }
 
   // Follow the selection, or the caret, to its spread when it is elsewhere.
+  // Only a change of selection or caret moves the view; changing the spread
+  // yourself must not be pulled back to the selection.
   $effect(() => {
     const page = app.text?.caret?.page ?? app.selection?.page;
-    if (page !== undefined) {
+    if (page === undefined) return;
+    untrack(() => {
       const index = app.spreadOfPage(page);
       if (index !== app.currentSpread) app.currentSpread = index;
-    }
+    });
   });
 
   // Overflow markers on frames shown in this spread.
@@ -456,15 +464,16 @@
             {#if app.showOutlines}
               {#each page.frame_ids as frameId (frameId)}
                 {@const patch = app.frames.get(frameKey(pageIndex, frameId))}
-                {#if patch && patch.kind !== "rule"}
+                {#if patch && patch.kind !== "rule" && patch.kind !== "page_number"}
                   <rect
                     x={patch.rect.x}
                     y={patch.rect.y}
                     width={patch.rect.w}
                     height={patch.rect.h}
                     fill="none"
-                    stroke={patch.kind === "text" ? "#9bb8e6" : "#cfc9bd"}
-                    stroke-dasharray="3 2"
+                    stroke="#c9c9c9"
+                    stroke-dasharray="1 3"
+                    stroke-linecap="round"
                     stroke-width="1"
                     vector-effect="non-scaling-stroke"
                   />
@@ -489,49 +498,6 @@
 
         {#if app.showCropMarks}
           <path class="crop-marks" d={cropMarks} fill="none" stroke="#9a968e" stroke-width="0.75" vector-effect="non-scaling-stroke" pointer-events="none" />
-        {/if}
-
-        {#if app.selection && selectionOffset !== null && !app.text}
-          {@const r = app.selection.rect}
-          <g transform={`translate(${selectionOffset} 0)`} pointer-events="none">
-            <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke="#2f6fd6" stroke-width="1.5" vector-effect="non-scaling-stroke" />
-            {#each [
-              [r.x, r.y],
-              [r.x + r.w / 2, r.y],
-              [r.x + r.w, r.y],
-              [r.x + r.w, r.y + r.h / 2],
-              [r.x + r.w, r.y + r.h],
-              [r.x + r.w / 2, r.y + r.h],
-              [r.x, r.y + r.h],
-              [r.x, r.y + r.h / 2],
-            ] as [hx, hy]}
-              <rect
-                x={hx - handleMm / 2}
-                y={hy - handleMm / 2}
-                width={handleMm}
-                height={handleMm}
-                fill="#fff"
-                stroke="#2f6fd6"
-                stroke-width="1"
-                vector-effect="non-scaling-stroke"
-              />
-            {/each}
-          </g>
-        {/if}
-
-        {#if app.selection && selectionOffset !== null && app.text}
-          {@const r = app.selection.rect}
-          <rect
-            x={selectionOffset + r.x}
-            y={r.y}
-            width={r.w}
-            height={r.h}
-            fill="none"
-            stroke="#2f6fd6"
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-            pointer-events="none"
-          />
         {/if}
 
         {#if caret && caretOffset !== null && !app.text?.selection.length}

@@ -8,7 +8,7 @@
     <button
       class="thumb"
       class:current={index === app.currentSpread}
-      onclick={() => (app.currentSpread = index)}
+      onclick={() => app.goToSpread(index)}
       title={`Spread ${index + 1}`}
     >
       <svg viewBox={`0 0 ${spread.width} ${spread.height}`} xmlns="http://www.w3.org/2000/svg">

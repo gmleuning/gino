@@ -1,11 +1,44 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
-  import { api, type Arrange, type ImageFit } from "./api";
+  import { api, type Arrange, type ImageFit, type ImageInfo } from "./api";
   import { app, run } from "./state.svelte";
   import StyleEditor from "./StyleEditor.svelte";
   import DocumentPanel from "./DocumentPanel.svelte";
 
   const selection = $derived(app.selection);
+
+  // Facts about the placed image. They change with the image, the frame's
+  // size and the crop, so they are fetched again (after a short pause, not on
+  // every step of a drag) whenever one of those changes.
+  let imageInfo = $state<ImageInfo | null>(null);
+  const imageKey = $derived(
+    selection?.kind === "image" && selection.image
+      ? [selection.page, selection.frame_id, selection.image, selection.fit, selection.rect.w, selection.rect.h, app.canUndo].join("|")
+      : null,
+  );
+  $effect(() => {
+    const key = imageKey;
+    const target = selection;
+    if (!key || !target) {
+      imageInfo = null;
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        imageInfo = await api.imageInfo(target.page, target.frame_id);
+      } catch {
+        imageInfo = null;
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  });
+
+  /** Under 150 dpi a picture looks soft in print; under 250 it may. */
+  function quality(dpi: number): string {
+    if (dpi < 150) return "low for print";
+    if (dpi < 250) return "fair for print";
+    return "good for print";
+  }
 
   function number(event: Event): number | null {
     const value = Number((event.target as HTMLInputElement).value);
@@ -85,6 +118,25 @@
       <button onclick={placeImage}>Place image…</button>
     </div>
     <div class="path">{selection.image ?? "No image placed"}</div>
+    {#if selection.image && imageInfo}
+      <figure class="original">
+        <img src={imageInfo.thumbnail} alt="The whole original, uncropped" />
+        <figcaption>Original, uncropped</figcaption>
+      </figure>
+      <dl class="facts">
+        <dt>Pixels</dt>
+        <dd>{imageInfo.pixel_width} × {imageInfo.pixel_height}</dd>
+        <dt>File says</dt>
+        <dd>{imageInfo.stated_dpi ? `${Math.round(imageInfo.stated_dpi)} dpi` : "no resolution stated"}</dd>
+        <dt>In this frame</dt>
+        <dd class:warn={imageInfo.effective_dpi < 150}>
+          {Math.round(imageInfo.effective_dpi)} dpi, {quality(imageInfo.effective_dpi)}
+        </dd>
+      </dl>
+      <div class="row" style="margin-top: 6px;">
+        <button onclick={() => imageInfo && api.openInDefaultApp(imageInfo.path).catch((error) => app.say(String(error)))}>Open original</button>
+      </div>
+    {/if}
     {#if selection.image}
       <div class="row">
         <label style="flex: 1">

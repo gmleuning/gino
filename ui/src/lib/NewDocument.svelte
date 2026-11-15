@@ -5,6 +5,7 @@
   import { save } from "@tauri-apps/plugin-dialog";
   import { api, type Fold, type Margins, type NewDocument, type Size } from "./api";
   import { app } from "./state.svelte";
+  import { prefs } from "./prefs.svelte";
 
   let { onclose, onopened }: { onclose: () => void; onopened: () => void } = $props();
 
@@ -18,18 +19,14 @@
   let margins = $state<Margins>({ top: 12, bottom: 15, inside: 12, outside: 10 });
   let columns = $state(1);
   let gutter = $state(4);
-  let latinFont = $state("Crimson Text");
-  let koreanFont = $state("Gowun Dodum");
-  let size = $state(10);
-  let leading = $state(14);
+  let latinFont = $state(prefs.current.new_latin_font);
+  let koreanFont = $state(prefs.current.new_korean_font);
+  let size = $state(prefs.current.new_size);
+  let leading = $state(prefs.current.new_leading);
   let defaults = $state<{ trim: Size; sheet: Size } | null>(null);
-  let starterFrames = $state(true);
+  let starterFrames = $state(prefs.current.starter_frames);
   let busy = $state(false);
 
-  api
-    .getPreferences()
-    .then((preferences) => (starterFrames = preferences.starter_frames))
-    .catch(() => {});
   let error = $state<string | null>(null);
 
   const folds: { value: Fold; label: string }[] = [

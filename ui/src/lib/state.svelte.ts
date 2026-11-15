@@ -36,12 +36,15 @@ class AppState {
   zoom = $state(3);
   message = $state<string | null>(null);
   /** Margin, column, printer-margin and spine guides. */
-  showGuides = $state(true);
+  showGuides = $state(false);
   showBleed = $state(false);
   /** Dashed outlines of every frame. */
   showOutlines = $state(false);
   /** Grey marks at the trim corners of the spread. */
   showCropMarks = $state(true);
+  /** The page strip on the left and the document panel on the right. */
+  showPages = $state(true);
+  showPanel = $state(true);
   tool = $state<Tool>("select");
   /** The next canvas click continues the selected story into the clicked frame. */
   threading = $state(false);
@@ -92,6 +95,19 @@ class AppState {
     const spreads = this.view?.spreads ?? [];
     const index = spreads.findIndex((spread) => spread.pages.some(([p]) => p === page));
     return index < 0 ? 0 : index;
+  }
+
+  /** Shows another spread; leaving the page clears the selection and ends typing. */
+  async goToSpread(index: number) {
+    if (!this.view) return;
+    const target = Math.min(Math.max(index, 0), this.view.spreads.length - 1);
+    if (target === this.currentSpread) return;
+    this.currentSpread = target;
+    if (this.text) await run(api.endEditing);
+    if (this.selection) {
+      const page = this.selection.page;
+      await run(() => api.selectFrame(page, null));
+    }
   }
 
   say(message: string | null) {
