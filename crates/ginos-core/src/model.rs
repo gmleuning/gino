@@ -147,6 +147,12 @@ pub enum Fold {
     SaddleA6OnA5,
     EightPageFold,
     Custom,
+    /// Letter pages, two to a tabloid sheet.
+    SaddleLetter,
+    /// Legal pages, two to a 17 x 14 inch sheet.
+    SaddleLegal,
+    /// Tabloid pages, two to a 22 x 17 inch sheet.
+    SaddleTabloid,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]

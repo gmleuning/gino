@@ -6,10 +6,10 @@ Gino does one narrow job. It is not a general page-layout program.
 
 ## What it does today
 
-- **Starts from a fold.** Choose A5 pages on A4, A6 pages on A5, the eight-page single-sheet fold, or a custom page size. Margins, gutter and sheet follow from the choice, and you can change them in the document panel.
+- **Starts from a fold.** Choose A5 pages on A4, A6 pages on A5, the eight-page single-sheet fold, a custom page size, or a North American saddle stitch (Letter, Legal or Tabloid pages). Margins, gutter and sheet follow from the choice, and you can change them in the document panel.
 - **Starter layout.** New zines begin with an image frame on the front and back covers, a blank inside front cover, and one text story threaded through every column from page 3 to the second-to-last page. A preference starts new zines empty instead.
 - **Frames.** Text, image and line frames in millimetres, snapping to margins, columns, the spine and each other. Click to select and drag; handles appear for resizing; arrow keys nudge (Shift for 5 mm); Delete removes. Double-click a text frame, or press Enter, to type in it.
-- **Bilingual text.** Korean and English set together, with Korean input-method support on the canvas. Paragraph styles pick a Latin font, a Korean font and whether Korean breaks between syllables or only at spaces.
+- **Bilingual text.** Korean and English set together, with Korean input-method support on the canvas. The Korean font, scale and line-breaking controls are hidden until you turn them on in Preferences. Paragraph styles pick a Latin font, a Korean font and whether Korean breaks between syllables or only at spaces.
 - **Threaded text.** A story flows from frame to frame; overflow is marked, and you click the marker and then the next frame to continue it.
 - **Images.** PNG, JPEG and TIFF, linked by path. The inspector shows the whole original, its pixel size, the resolution the file states and the resolution it prints at in the frame. Fill, fit or manual crop; **Crop to page** and **Crop to bleed** trim a frame that runs off the edge without moving the picture.
 - **Guides, off by default.** Margins and columns, bleed (light red, outer edges only), frame outlines and crop marks at the text area can each be shown or hidden. The page always stays white.

@@ -13,6 +13,9 @@
     saddle_a6_on_a5: "Saddle stitch, A6 pages on A5",
     eight_page_fold: "Eight-page fold on one A4 sheet",
     custom: "Saddle stitch, custom size",
+    saddle_letter: "Saddle stitch, Letter pages on Tabloid",
+    saddle_legal: "Saddle stitch, Legal pages on a 17 × 14 in sheet",
+    saddle_tabloid: "Saddle stitch, Tabloid pages on a 22 × 17 in sheet",
   };
 
   function number(event: Event): number | null {

@@ -241,7 +241,14 @@ fn fold_test(fold: &str, sheet: Option<&str>, out: &Path) -> Result<(), String> 
         "eight-page" => (Fold::EightPageFold, 8),
         "a5" => (Fold::SaddleA5OnA4, 8),
         "a6" => (Fold::SaddleA6OnA5, 8),
-        other => return Err(format!("fold \"{other}\" does not exist; use eight-page, a5 or a6")),
+        "letter" => (Fold::SaddleLetter, 8),
+        "legal" => (Fold::SaddleLegal, 8),
+        "tabloid" => (Fold::SaddleTabloid, 8),
+        other => {
+            return Err(format!(
+                "fold \"{other}\" does not exist; use eight-page, a5, a6, letter, legal or tabloid"
+            ))
+        }
     };
     let sheet = sheet.map(parse_sheet).transpose()?;
     let mut fonts = Fonts::with_system_fonts();

@@ -20,6 +20,10 @@ pub mod paper {
     pub const A4: (f64, f64) = (210.0, 297.0);
     pub const A5: (f64, f64) = (148.0, 210.0);
     pub const A6: (f64, f64) = (105.0, 148.0);
+    /// North American sizes: 8.5 x 11, 8.5 x 14 and 11 x 17 inches.
+    pub const LETTER: (f64, f64) = (215.9, 279.4);
+    pub const LEGAL: (f64, f64) = (215.9, 355.6);
+    pub const TABLOID: (f64, f64) = (279.4, 431.8);
 }
 
 #[cfg(test)]

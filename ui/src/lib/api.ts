@@ -27,7 +27,14 @@ export interface Columns {
   gutter: number;
 }
 
-export type Fold = "saddle_a5_on_a4" | "saddle_a6_on_a5" | "eight_page_fold" | "custom";
+export type Fold =
+  | "saddle_a5_on_a4"
+  | "saddle_a6_on_a5"
+  | "eight_page_fold"
+  | "custom"
+  | "saddle_letter"
+  | "saddle_legal"
+  | "saddle_tabloid";
 export type SheetMode = "same_size" | "oversize";
 export type FrameKind = "text" | "image" | "rectangle" | "rule" | "page_number";
 export type ImageFit = "fill" | "fit" | "manual";

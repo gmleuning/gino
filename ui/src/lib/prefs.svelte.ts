@@ -15,6 +15,8 @@ export interface Preferences {
   ui_font_size: number;
   /** New zines start with cover image frames and a threaded story. */
   starter_frames: boolean;
+  /** Show the Korean controls: Korean font, scale and line breaking. */
+  show_korean: boolean;
   new_latin_font: string;
   new_korean_font: string;
   new_size: number;
@@ -36,6 +38,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   ui_font: "",
   ui_font_size: 13,
   starter_frames: true,
+  show_korean: false,
   new_latin_font: "Crimson Text",
   new_korean_font: "Gowun Dodum",
   new_size: 10,

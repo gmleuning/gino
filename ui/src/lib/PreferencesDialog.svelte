@@ -114,6 +114,10 @@
       </div>
       <div class="note">The page always stays white, as it will print.</div>
 
+      <h3>Korean</h3>
+      <label class="check-row"><input type="checkbox" bind:checked={draft.show_korean} />Show the Korean options (font, scale, line breaking)</label>
+      <div class="note">Korean text can always be typed; this only shows the controls for setting it.</div>
+
       <h3>Show when Gino starts</h3>
       <div class="grid">
         <label class="check-row"><input type="checkbox" bind:checked={draft.show_guides} />Guides (margins, columns)</label>
@@ -156,14 +160,16 @@
             {/each}
           </select>
         </label>
-        <label class="wide">
-          Korean font
-          <select bind:value={draft.new_korean_font}>
-            {#each withCurrent(families, draft.new_korean_font) as family}
-              <option value={family}>{family}</option>
-            {/each}
-          </select>
-        </label>
+        {#if draft.show_korean}
+          <label class="wide">
+            Korean font
+            <select bind:value={draft.new_korean_font}>
+              {#each withCurrent(families, draft.new_korean_font) as family}
+                <option value={family}>{family}</option>
+              {/each}
+            </select>
+          </label>
+        {/if}
         <label>Size (pt)<input type="number" min="4" step="0.5" bind:value={draft.new_size} /></label>
         <label>Leading (pt)<input type="number" min="4" step="0.5" bind:value={draft.new_leading} /></label>
       </div>

@@ -29,6 +29,11 @@
 
   let error = $state<string | null>(null);
 
+  const northAmerican: { value: Fold; label: string }[] = [
+    { value: "saddle_letter", label: "Saddle stitch: Letter pages (8.5 × 11 in), printed on Tabloid" },
+    { value: "saddle_legal", label: "Saddle stitch: Legal pages (8.5 × 14 in), printed on 17 × 14 in" },
+    { value: "saddle_tabloid", label: "Saddle stitch: Tabloid pages (11 × 17 in), printed on 22 × 17 in" },
+  ];
   const folds: { value: Fold; label: string }[] = [
     { value: "saddle_a5_on_a4", label: "Saddle stitch: A5 pages, printed on A4" },
     { value: "saddle_a6_on_a5", label: "Saddle stitch: A6 pages, printed on A5" },
@@ -125,6 +130,11 @@
           {#each folds as option}
             <option value={option.value}>{option.label}</option>
           {/each}
+          <optgroup label="North American">
+            {#each northAmerican as option}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </optgroup>
         </select>
       </label>
       {#if fold === "custom"}
@@ -169,14 +179,16 @@
           {/each}
         </select>
       </label>
-      <label class="wide">
-        Korean font
-        <select bind:value={koreanFont}>
-          {#each families.includes(koreanFont) ? families : [koreanFont, ...families] as family}
-            <option value={family}>{family}</option>
-          {/each}
-        </select>
-      </label>
+      {#if prefs.current.show_korean}
+        <label class="wide">
+          Korean font
+          <select bind:value={koreanFont}>
+            {#each families.includes(koreanFont) ? families : [koreanFont, ...families] as family}
+              <option value={family}>{family}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <label>Size (pt)<input type="number" min="4" step="0.5" bind:value={size} /></label>
       <label>Leading (pt)<input type="number" min="4" step="0.5" bind:value={leading} /></label>
     </div>

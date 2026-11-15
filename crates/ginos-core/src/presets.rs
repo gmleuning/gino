@@ -59,6 +59,9 @@ pub fn fold_sizes(fold: Fold, custom_trim: Option<Size>) -> (Size, Size) {
             let trim = custom_trim.unwrap_or(size(paper::A5));
             (trim, footprint(Fold::Custom, trim))
         }
+        Fold::SaddleLetter => (size(paper::LETTER), footprint(fold, size(paper::LETTER))),
+        Fold::SaddleLegal => (size(paper::LEGAL), footprint(fold, size(paper::LEGAL))),
+        Fold::SaddleTabloid => (size(paper::TABLOID), footprint(fold, size(paper::TABLOID))),
     }
 }
 
@@ -81,6 +84,18 @@ pub fn default_margins(fold: Fold) -> Margins {
             bottom: 15.0,
             inside: 12.0,
             outside: 10.0,
+        },
+        Fold::SaddleLetter | Fold::SaddleLegal => Margins {
+            top: 15.0,
+            bottom: 18.0,
+            inside: 15.0,
+            outside: 12.0,
+        },
+        Fold::SaddleTabloid => Margins {
+            top: 20.0,
+            bottom: 24.0,
+            inside: 20.0,
+            outside: 16.0,
         },
         Fold::SaddleA6OnA5 => Margins {
             top: 9.0,
@@ -217,6 +232,20 @@ mod tests {
             korean_font: "Gowun Dodum".to_owned(),
             size: 10.0,
             leading: 14.0,
+        }
+    }
+
+    #[test]
+    fn north_american_folds_fit_two_pages_on_their_sheet() {
+        for (fold, trim, sheet) in [
+            (Fold::SaddleLetter, (215.9, 279.4), (431.8, 279.4)),
+            (Fold::SaddleLegal, (215.9, 355.6), (431.8, 355.6)),
+            (Fold::SaddleTabloid, (279.4, 431.8), (558.8, 431.8)),
+        ] {
+            let document = new_document(&request(fold, 10, None)).unwrap();
+            assert_eq!((document.document.trim.width, document.document.trim.height), trim);
+            assert_eq!((document.document.sheet.width, document.document.sheet.height), sheet);
+            assert_eq!(document.pages.len(), 12);
         }
     }
 

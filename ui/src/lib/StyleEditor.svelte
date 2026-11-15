@@ -5,6 +5,7 @@
 
   import { api, type Alignment, type CharacterStyle, type KoreanBreak, type ParagraphStyle } from "./api";
   import { app, run } from "./state.svelte";
+  import { prefs } from "./prefs.svelte";
 
   const text = $derived(app.text);
   const paragraphStyle = $derived(app.paragraphStyles.find((style) => style.id === text?.paragraph_style) ?? null);
@@ -74,6 +75,7 @@
             {/each}
           </select>
         </label>
+        {#if prefs.current.show_korean}
         <label style="grid-column: 1 / -1;">
           Korean font
           <select value={paragraphStyle.korean_font} onchange={(e) => setParagraph("korean_font", (e.target as HTMLSelectElement).value)}>
@@ -82,8 +84,10 @@
             {/each}
           </select>
         </label>
+        {/if}
         <label>Size (pt)<input type="number" step="0.5" min="2" value={paragraphStyle.size} onchange={(e) => setParagraph("size", number(e))} /></label>
         <label>Leading (pt)<input type="number" step="0.5" min="2" value={paragraphStyle.leading} onchange={(e) => setParagraph("leading", number(e))} /></label>
+        {#if prefs.current.show_korean}
         <label>
           Korean scale (%)
           <input
@@ -98,6 +102,7 @@
             }}
           />
         </label>
+        {/if}
         <label>Tracking (pt)<input type="number" step="0.1" value={paragraphStyle.tracking} onchange={(e) => setParagraph("tracking", number(e))} /></label>
         <label>
           Alignment
@@ -108,6 +113,7 @@
             <option value="justify">Justify</option>
           </select>
         </label>
+        {#if prefs.current.show_korean}
         <label>
           Korean breaks
           <select value={paragraphStyle.korean_break} onchange={(e) => setParagraph("korean_break", (e.target as HTMLSelectElement).value as KoreanBreak)}>
@@ -115,6 +121,7 @@
             <option value="syllable">Between syllables</option>
           </select>
         </label>
+        {/if}
         <label>Space before (mm)<input type="number" step="0.5" min="0" value={paragraphStyle.space_before} onchange={(e) => setParagraph("space_before", number(e))} /></label>
         <label>Space after (mm)<input type="number" step="0.5" min="0" value={paragraphStyle.space_after} onchange={(e) => setParagraph("space_after", number(e))} /></label>
         <label>First-line indent (mm)<input type="number" step="0.5" value={paragraphStyle.first_line_indent} onchange={(e) => setParagraph("first_line_indent", number(e))} /></label>
