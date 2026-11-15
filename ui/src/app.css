@@ -1,16 +1,32 @@
+/* ---------- Lo Sport (light), the default ---------- */
 :root {
   --paper: #ffffff;
-  --desk: #e9e6df;
-  --ink: #1e1e1e;
-  --muted: #6f6f6f;
-  --line: #d6d2c8;
-  --accent: #2f6fd6;
-  --tool-active: #c23b32;
-  --warn: #b3261e;
-  --panel: #f7f5f0;
+  --desk: #7b7f79;                 /* grey of the card's ground */
+  --desk-grain: url("./assets/desk-grain.png");
+  --opening: #d03d1c;              /* the opening screen: Lo Sport cover red */
+  --opening-grain: url("./assets/desk-grain-red.png");
+  --ink: #1b1c1a;
+  --muted: #62655f;
+  --line: #d4d3cc;
+  --field-line: #c4c3bb;
+  --accent: #c93a1c;               /* selection, current page, focus */
+  --tool-active: #ffffff;          /* chosen tool: white block ... */
+  --tool-active-ink: #d03d1c;      /* ... red icon */
+  --warn: #b8321a;
+  --guide: #2b86a8;
+  --panel: #faf9f6;
   --field: #ffffff;
-  --hover: #e4e0d6;
-  --backdrop: rgba(30, 30, 30, 0.35);
+  --hover: #e7e6e0;
+  --top: #d03d1c;                  /* red bar; white on it is 4.8 : 1 */
+  --top-ink: #ffffff;
+  --top-line: #a92f14;
+  --top-hover: rgba(255, 255, 255, 0.16);
+  --mark: #fbf7ea;                 /* logotype */
+  --status: #5d625c;               /* status line: the card grey, darkened */
+  --status-ink: #f9f5e7;
+  --status-warn: #ffd9cf;
+  --backdrop: rgba(27, 28, 26, 0.35);
+  --radius: 2px;
   --ui-font: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   --ui-size: 13px;
   font-family: var(--ui-font);
@@ -18,18 +34,32 @@
   color: var(--ink);
 }
 
-/* The page itself stays paper-white; only the program around it darkens. */
+/* ---------- Uomo di ferro (dark). The page stays white. ---------- */
 :root[data-theme="dark"] {
-  --desk: #1c1c1b;
-  --ink: #e8e6e1;
-  --muted: #9d9a93;
-  --line: #3a3936;
-  --accent: #5b8def;
-  --tool-active: #b8372f;
-  --warn: #f2786d;
-  --panel: #262624;
-  --field: #2f2e2c;
-  --hover: #34332f;
+  --desk: #2a2826;
+  --desk-grain: url("./assets/desk-grain-dark.png");
+  --opening: #2a2826;
+  --opening-grain: url("./assets/desk-grain-dark.png");
+  --ink: #ece6d6;
+  --muted: #a19b8d;
+  --line: #383531;
+  --field-line: #46423d;
+  --accent: #ea5326;
+  --tool-active: #ea5326;          /* chosen tool: red block, black icon */
+  --tool-active-ink: #141311;
+  --warn: #ff8a66;
+  --guide: #4fb0d1;
+  --panel: #1f1d1a;
+  --field: #2a2825;
+  --hover: #34312d;
+  --top: #141311;
+  --top-ink: #ece6d6;
+  --top-line: #383531;
+  --top-hover: rgba(236, 230, 214, 0.1);
+  --mark: #ece6d6;
+  --status: #141311;
+  --status-ink: #a19b8d;
+  --status-warn: #ff8a66;
   --backdrop: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
@@ -268,12 +298,6 @@ select {
   gap: 2px;
 }
 
-/* The chosen tool: white on red, dark enough to read. */
-.tools button.active {
-  background: var(--tool-active);
-  border-color: var(--tool-active);
-  color: #fff;
-}
 
 .inspector section {
   margin-top: 14px;
@@ -611,4 +635,239 @@ select {
 
 .inspector dl.facts dd.warn {
   color: var(--warn);
+}
+
+/* ==================== Themes: Lo Sport and Uomo di ferro ==================== */
+/* ---------- controls ---------- */
+button,
+input[type="number"],
+input[type="text"],
+select {
+  border-color: var(--field-line);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--ink);
+}
+
+/* ---------- top bar ---------- */
+.topbar {
+  background: var(--top);
+  color: var(--top-ink);
+  border-bottom: 1px solid var(--top-line);
+  padding: 0;
+}
+.topbar-left {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+.topbar .logotype {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;                 /* a small break before the menus */
+  flex: none;
+  color: var(--mark);
+}
+.topbar .logotype svg {
+  pointer-events: none;            /* so the logotype drags the window too */
+  height: 24px;
+  width: auto;
+  display: block;
+}
+.menubar .menu-title {
+  color: var(--top-ink);
+}
+.menubar .menu-title:hover {
+  background: var(--top-hover);
+  border-color: transparent;
+}
+.menubar .menu-title.open {
+  background: var(--tool-active);
+  color: var(--tool-active-ink);
+}
+.menubar .dropdown {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--field-line);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.menubar .dropdown.submenu {
+  border-radius: var(--radius);
+}
+.menubar .item {
+  color: var(--ink);
+}
+.menubar .item:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+:root[data-theme="dark"] .menubar .item:hover:not(:disabled),
+:root[data-theme="dark"] .menubar .item:hover:not(:disabled) .shortcut {
+  color: #141311;
+}
+
+/* Tools: pictures, not words. White on the bar; the chosen one inverts. */
+.tools {
+  gap: 4px;
+}
+.tools button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--top-ink);
+}
+.tools button svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.tools button:hover:not(.active) {
+  background: var(--top-hover);
+  border-color: transparent;
+}
+.tools button.active {
+  background: var(--tool-active);
+  border-color: var(--tool-active);
+  color: var(--tool-active-ink);
+}
+.tools button:focus-visible {
+  outline: 2px solid var(--top-ink);
+  outline-offset: 1px;
+}
+
+/* ---------- desk ---------- */
+.canvas-wrap {
+  background: var(--desk) var(--desk-grain);
+}
+.canvas-wrap:has(> .empty) {
+  background: var(--opening) var(--opening-grain);
+}
+.empty {
+  color: var(--status-ink);
+}
+.empty .logotype svg {
+  height: 96px;
+  width: auto;
+  color: var(--mark);
+  display: block;
+  margin: 0 auto 18px;
+}
+
+/* ---------- side panels (Cartolina) ---------- */
+.strip .thumb {
+  border-width: 1px;
+  border-radius: var(--radius);
+  padding: 5px;
+}
+.strip .thumb.current {
+  border-color: var(--accent);
+  background: var(--field);
+}
+.strip .thumb.current .label {
+  color: var(--ink);
+}
+.inspector {
+  font-variant-numeric: tabular-nums;
+}
+.inspector h2 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+}
+/* Sections open and close from their title. */
+.inspector h2 .section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  text-align: left;
+}
+.inspector h2 .section-toggle:hover {
+  color: var(--ink);
+}
+.inspector h2 .section-toggle svg {
+  flex: none;
+  transition: transform 0.12s;
+}
+.inspector .panel-section.closed h2 {
+  margin-bottom: 0;
+}
+.inspector .panel-section.closed h2 .section-toggle svg {
+  transform: rotate(-90deg);
+}
+
+/* ---------- status line ---------- */
+.statusbar {
+  background: var(--status);
+  color: var(--status-ink);
+  border-top: 1px solid rgba(0, 0, 0, 0.25);
+}
+.statusbar .warn {
+  color: var(--status-warn);
+}
+
+/* ---------- dialogs ---------- */
+.modal {
+  border-color: var(--field-line);
+  border-radius: var(--radius);
+}
+
+/* Margin and column guides come drawn from the core; recolour them here. */
+.guides .margin,
+.guides .column {
+  stroke: var(--guide);
+}
+
+/* Window controls, in place of the Windows title bar. */
+.window-controls {
+  grid-column: 3;
+  justify-self: end;
+  align-self: stretch;
+  display: flex;
+}
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--top-ink);
+}
+.window-controls button:hover:not(:disabled) {
+  background: var(--top-hover);
+}
+.window-controls button.close:hover:not(:disabled) {
+  background: var(--tool-active);
+  color: var(--tool-active-ink);
+}
+.window-controls svg {
+  display: block;
+  shape-rendering: crispEdges;
 }

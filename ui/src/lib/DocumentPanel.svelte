@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Section from "./Section.svelte";
   // Document settings: margins, columns, sheet, bleed, printer margin,
   // creep and the page count. The fold and trim size are fixed once a
   // document is made.
@@ -45,18 +46,16 @@
     {app.view.sheet_mode === "oversize" ? "oversize: bleed and crop marks" : "same size: no bleed"}
   </div>
 
-  <section>
-    <h2>Show</h2>
+  <Section title="Show">
     <div class="grid">
       <label class="check"><input type="checkbox" bind:checked={app.showGuides} />Guides</label>
       <label class="check"><input type="checkbox" bind:checked={app.showCropMarks} />Crop marks</label>
       <label class="check"><input type="checkbox" bind:checked={app.showOutlines} />Frame outlines</label>
       <label class="check"><input type="checkbox" bind:checked={app.showBleed} />Bleed</label>
     </div>
-  </section>
+  </Section>
 
-  <section>
-    <h2>Pages</h2>
+  <Section title="Pages">
     <div class="row" style="margin-top: 0;">
       <button onclick={() => run(() => api.addPages(pageStep))} disabled={settings.fold === "eight_page_fold"}>Add {pageStep}</button>
       <button onclick={() => run(() => api.removePages(pageStep))} disabled={settings.fold === "eight_page_fold" || app.view.pages.length <= pageStep}>
@@ -66,10 +65,9 @@
     {#if settings.fold === "eight_page_fold"}
       <div class="path">An eight-page fold always has eight pages.</div>
     {/if}
-  </section>
+  </Section>
 
-  <section>
-    <h2>Margins (mm)</h2>
+  <Section title="Margins (mm)">
     <div class="grid">
       <label>Top<input type="number" step="0.5" min="0" value={settings.margins.top} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.margins.top = v)); }} /></label>
       <label>Bottom<input type="number" step="0.5" min="0" value={settings.margins.bottom} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.margins.bottom = v)); }} /></label>
@@ -78,10 +76,9 @@
       <label>Columns<input type="number" step="1" min="1" max="6" value={settings.columns.count} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.columns.count = Math.max(1, Math.round(v)))); }} /></label>
       <label>Gutter<input type="number" step="0.5" min="0" value={settings.columns.gutter} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.columns.gutter = v)); }} /></label>
     </div>
-  </section>
+  </Section>
 
-  <section>
-    <h2>Printing (mm)</h2>
+  <Section title="Printing (mm)">
     <div class="grid">
       <label>Sheet width<input type="number" step="1" min="10" value={settings.sheet.width} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.sheet.width = v)); }} /></label>
       <label>Sheet height<input type="number" step="1" min="10" value={settings.sheet.height} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.sheet.height = v)); }} /></label>
@@ -90,7 +87,7 @@
       <label>Creep per sheet<input type="number" step="0.05" min="0" value={settings.creep_per_sheet} onchange={(e) => { const v = number(e); if (v !== null) change((s) => (s.creep_per_sheet = v)); }} /></label>
     </div>
     <div class="path">Bleed and creep apply only on an oversize sheet. The printer margin is drawn as a guide.</div>
-  </section>
+  </Section>
 
   <div class="row" style="font-size: 11px; color: var(--muted);">
     Tools: V select, T text, I image, L line. Click a frame to select it and drag to move it; double-click a text frame to type.

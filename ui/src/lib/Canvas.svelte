@@ -512,7 +512,7 @@
                     width={patch.rect.w}
                     height={patch.rect.h}
                     fill="none"
-                    stroke={selected ? "#e58a84" : "#c9c9c9"}
+                    stroke={selected ? "var(--accent)" : "#c9c9c9"}
                     pointer-events="none"
                     stroke-dasharray="1 3"
                     stroke-linecap="round"
@@ -602,13 +602,13 @@
               width={markerMm}
               height={markerMm}
               fill="#fff"
-              stroke="#b3261e"
+              stroke="var(--accent)"
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"
             />
             <path
               d={`M ${marker.x - markerMm / 2} ${marker.y - markerMm * 0.8} V ${marker.y - markerMm * 0.2} M ${marker.x - markerMm * 0.8} ${marker.y - markerMm / 2} H ${marker.x - markerMm * 0.2}`}
-              stroke="#b3261e"
+              stroke="var(--accent)"
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"
             />

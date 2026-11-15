@@ -94,8 +94,8 @@
           Colour scheme
           <select bind:value={draft.theme}>
             <option value="system">Same as Windows</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="light">Lo Sport (light)</option>
+            <option value="dark">Uomo di ferro (dark)</option>
           </select>
         </label>
         <label>

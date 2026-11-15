@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Section from "./Section.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { api, type Arrange, type ImageFit, type ImageInfo } from "./api";
   import { app, run } from "./state.svelte";
@@ -212,8 +213,7 @@
     <StyleEditor />
   {/if}
 
-  <section>
-    <h2>Arrange</h2>
+  <Section title="Arrange">
     <div class="path" style="margin-top: 0;">Layer {selection.stack_index + 1} of {selection.stack_count} on this page</div>
     <div class="row">
       <button onclick={() => arrange("back")} disabled={selection.stack_index === 0}>To back</button>
@@ -224,7 +224,7 @@
     <div class="row">
       <button onclick={() => run(api.deleteFrame)}>Delete frame</button>
     </div>
-  </section>
+  </Section>
 
   <div class="row" style="font-size: 11px; color: var(--muted);">
     {#if app.text}

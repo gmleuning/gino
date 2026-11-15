@@ -11,6 +11,9 @@
   import NewDocument from "./lib/NewDocument.svelte";
   import PreferencesDialog from "./lib/PreferencesDialog.svelte";
   import MenuBar, { type Menu, type MenuItem } from "./lib/MenuBar.svelte";
+  import Logotype from "./lib/Logotype.svelte";
+  import ToolIcon from "./lib/ToolIcon.svelte";
+  import WindowControls from "./lib/WindowControls.svelte";
 
   type PrintMode = "paged" | "viewed" | "folded";
 
@@ -299,20 +302,27 @@
   class="layout"
   style:grid-template-columns={`${app.showPages ? "180px " : ""}1fr${app.showPanel ? " auto" : ""}`}
 >
-  <div class="topbar">
-    <div class="topbar-left"><MenuBar {menus} /></div>
+  <!-- No Windows title bar: the bar's empty space moves the window, double-click maximises. -->
+  <div class="topbar" data-tauri-drag-region>
+    <div class="topbar-left" data-tauri-drag-region>
+      <div class="logotype" data-tauri-drag-region><Logotype /></div>
+      <MenuBar {menus} />
+    </div>
     {#if app.view}
-      <div class="tools" role="toolbar" aria-label="Tools">
+      <div class="tools" role="toolbar" aria-label="Tools" data-tauri-drag-region>
         {#each tools as entry}
           {@const key = prefs.current.shortcuts[entry.command]?.[0]}
           <button
             class:active={app.tool === entry.tool}
             title={key ? `${entry.label} (${describe(key)})` : entry.label}
-            onclick={() => setTool(entry.tool)}>{entry.label}</button
+            aria-label={entry.label}
+            aria-pressed={app.tool === entry.tool}
+            onclick={() => setTool(entry.tool)}><ToolIcon tool={entry.tool} /></button
           >
         {/each}
       </div>
     {/if}
+    <WindowControls />
   </div>
 
   {#if app.showPages}
@@ -327,6 +337,7 @@
     {:else}
       <div class="empty">
         <div>
+          <div class="logotype"><Logotype /></div>
           <p>Make a new zine, or open a <code>.zine</code> folder.</p>
           <button onclick={() => (showNew = true)}>New…</button>
           <button onclick={() => openDocument()}>Open…</button>

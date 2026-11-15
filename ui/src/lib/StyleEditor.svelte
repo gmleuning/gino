@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Section from "./Section.svelte";
   // Paragraph and character styles for the text being edited. Applying a
   // style and editing a style's fields are both commands in the core; every
   // paragraph using a style reflows when it changes.
@@ -57,8 +58,7 @@
 </script>
 
 {#if text}
-  <section>
-    <h2>Paragraph style</h2>
+  <Section title="Paragraph style">
     <select value={text.paragraph_style} onchange={(e) => run(() => api.applyParagraphStyle((e.target as HTMLSelectElement).value))}>
       {#each app.paragraphStyles as style (style.id)}
         <option value={style.id}>{style.id}</option>
@@ -131,10 +131,9 @@
       <input type="text" placeholder="New style name" bind:value={newParagraphName} style="flex: 1;" onkeydown={(e) => e.key === "Enter" && createParagraph()} />
       <button disabled={!newParagraphName.trim()} onclick={createParagraph}>New</button>
     </div>
-  </section>
+  </Section>
 
-  <section>
-    <h2>Character style</h2>
+  <Section title="Character style">
     <select
       value={text.character_style ?? ""}
       onchange={(e) => {
@@ -182,5 +181,5 @@
       <input type="text" placeholder="New style name" bind:value={newCharacterName} style="flex: 1;" onkeydown={(e) => e.key === "Enter" && createCharacter()} />
       <button disabled={!newCharacterName.trim()} onclick={createCharacter}>New</button>
     </div>
-  </section>
+  </Section>
 {/if}
