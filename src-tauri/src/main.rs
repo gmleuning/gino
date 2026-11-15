@@ -291,13 +291,13 @@ struct ExportResult {
 }
 
 #[tauri::command]
-fn export_reader(path: Option<String>, state: State<'_, AppState>) -> CommandResult<ExportResult> {
+fn export_reader(path: Option<String>, dpi: Option<f64>, state: State<'_, AppState>) -> CommandResult<ExportResult> {
     with_session(&state, |session| {
         let target: PathBuf = match path {
             Some(path) => PathBuf::from(path),
             None => session.default_export_path("reader"),
         };
-        let overflows = session.export_reader_pdf(&target)?;
+        let overflows = session.export_reader_pdf(&target, dpi)?;
         Ok(ExportResult {
             path: target.to_string_lossy().into_owned(),
             overflows,
@@ -306,10 +306,10 @@ fn export_reader(path: Option<String>, state: State<'_, AppState>) -> CommandRes
 }
 
 #[tauri::command]
-fn export_imposed(path: String, sheet: Option<Size>, state: State<'_, AppState>) -> CommandResult<ExportResult> {
+fn export_imposed(path: String, sheet: Option<Size>, dpi: Option<f64>, state: State<'_, AppState>) -> CommandResult<ExportResult> {
     with_session(&state, |session| {
         let target = PathBuf::from(path);
-        let overflows = session.export_imposed_pdf(&target, sheet)?;
+        let overflows = session.export_imposed_pdf(&target, sheet, dpi)?;
         Ok(ExportResult {
             path: target.to_string_lossy().into_owned(),
             overflows,
@@ -318,10 +318,10 @@ fn export_imposed(path: String, sheet: Option<Size>, state: State<'_, AppState>)
 }
 
 #[tauri::command]
-fn export_paged(path: String, state: State<'_, AppState>) -> CommandResult<ExportResult> {
+fn export_paged(path: String, dpi: Option<f64>, state: State<'_, AppState>) -> CommandResult<ExportResult> {
     with_session(&state, |session| {
         let target = PathBuf::from(path);
-        let overflows = session.export_paged_pdf(&target)?;
+        let overflows = session.export_paged_pdf(&target, dpi)?;
         Ok(ExportResult {
             path: target.to_string_lossy().into_owned(),
             overflows,
@@ -330,10 +330,10 @@ fn export_paged(path: String, state: State<'_, AppState>) -> CommandResult<Expor
 }
 
 #[tauri::command]
-fn export_page(path: String, page: usize, state: State<'_, AppState>) -> CommandResult<ExportResult> {
+fn export_page(path: String, page: usize, dpi: Option<f64>, state: State<'_, AppState>) -> CommandResult<ExportResult> {
     with_session(&state, |session| {
         let target = PathBuf::from(path);
-        let overflows = session.export_page_pdf(&target, page)?;
+        let overflows = session.export_page_pdf(&target, page, dpi)?;
         Ok(ExportResult {
             path: target.to_string_lossy().into_owned(),
             overflows,
@@ -341,12 +341,23 @@ fn export_page(path: String, page: usize, state: State<'_, AppState>) -> Command
     })
 }
 
-/// Opens a file the app wrote (a PDF to print) in its default program.
+#[tauri::command]
+fn image_info(page: usize, frame_id: String, state: State<'_, AppState>) -> CommandResult<ginos_core::images::ImageInfo> {
+    with_session(&state, |session| session.image_info(page, &frame_id))
+}
+
+/// Opens a PDF the app wrote, or a placed image, in its default program.
 #[tauri::command]
 fn open_in_default_app(path: String) -> CommandResult<()> {
     let path = PathBuf::from(path);
-    if path.extension().and_then(|extension| extension.to_str()) != Some("pdf") || !path.is_file() {
-        return Err(format!("{} is not a PDF that exists", path.display()));
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    let allowed = ["pdf", "png", "jpg", "jpeg", "tif", "tiff"];
+    if !allowed.contains(&extension.as_str()) || !path.is_file() {
+        return Err(format!("{} is not a PDF or image that exists", path.display()));
     }
     // Explorer hands the file to whatever program opens PDFs.
     std::process::Command::new("explorer")
@@ -356,40 +367,25 @@ fn open_in_default_app(path: String) -> CommandResult<()> {
         .map_err(|error| format!("could not open {}: {error}", path.display()))
 }
 
-/// Settings that belong to this computer rather than to a document.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-struct Preferences {
-    /// New zines start with cover image frames and a threaded story.
-    #[serde(default = "yes")]
-    starter_frames: bool,
-}
-
-fn yes() -> bool {
-    true
-}
-
-impl Default for Preferences {
-    fn default() -> Self {
-        Self { starter_frames: true }
-    }
-}
-
 fn preferences_path(app: &tauri::AppHandle) -> CommandResult<PathBuf> {
     let folder = app.path().app_config_dir().map_err(|error| error.to_string())?;
     Ok(folder.join("preferences.json"))
 }
 
 #[tauri::command]
-fn get_preferences(app: tauri::AppHandle) -> CommandResult<Preferences> {
+/// This computer's preferences, as the interface last saved them; the
+/// interface fills in defaults for anything missing.
+fn get_preferences(app: tauri::AppHandle) -> CommandResult<serde_json::Value> {
     let path = preferences_path(&app)?;
-    match std::fs::read_to_string(&path) {
-        Ok(text) => Ok(serde_json::from_str(&text).unwrap_or_default()),
-        Err(_) => Ok(Preferences::default()),
-    }
+    let stored = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .filter(serde_json::Value::is_object);
+    Ok(stored.unwrap_or_else(|| serde_json::json!({})))
 }
 
 #[tauri::command]
-fn set_preferences(preferences: Preferences, app: tauri::AppHandle) -> CommandResult<()> {
+fn set_preferences(preferences: serde_json::Value, app: tauri::AppHandle) -> CommandResult<()> {
     let path = preferences_path(&app)?;
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
@@ -464,6 +460,7 @@ fn main() {
             export_paged,
             export_page,
             open_in_default_app,
+            image_info,
             get_preferences,
             set_preferences,
             default_export_path,

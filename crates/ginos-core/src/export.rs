@@ -29,10 +29,11 @@ pub fn reader_pdf(
     fonts: &mut Fonts,
     images: &mut ImageCache,
     document: &Document,
+    dpi: Option<f64>,
 ) -> Result<(Vec<u8>, Composition), Error> {
     let composition = compose(fonts, document, images)?;
     let scene = reader_spread_scene(document, &composition);
-    let pdf = scene_to_pdf(&scene)?;
+    let pdf = scene_to_pdf(&at_resolution(scene, dpi)?)?;
     Ok((pdf, composition))
 }
 
@@ -41,9 +42,10 @@ pub fn paged_pdf(
     fonts: &mut Fonts,
     images: &mut ImageCache,
     document: &Document,
+    dpi: Option<f64>,
 ) -> Result<(Vec<u8>, Composition), Error> {
     let composition = compose(fonts, document, images)?;
-    let pdf = scene_to_pdf(&composition.scene)?;
+    let pdf = scene_to_pdf(&at_resolution(composition.scene.clone(), dpi)?)?;
     Ok((pdf, composition))
 }
 
@@ -53,6 +55,7 @@ pub fn page_pdf(
     images: &mut ImageCache,
     document: &Document,
     page: usize,
+    dpi: Option<f64>,
 ) -> Result<(Vec<u8>, Composition), Error> {
     if page >= document.pages.len() {
         return Err(Error::Invalid(format!(
@@ -65,7 +68,7 @@ pub fn page_pdf(
     let scene = Scene {
         pages: vec![composition.scene.pages[page].clone()],
     };
-    let pdf = scene_to_pdf(&scene)?;
+    let pdf = scene_to_pdf(&at_resolution(scene, dpi)?)?;
     Ok((pdf, composition))
 }
 
@@ -76,11 +79,20 @@ pub fn imposed_pdf(
     images: &mut ImageCache,
     document: &Document,
     sheet: Option<Size>,
+    dpi: Option<f64>,
 ) -> Result<(Vec<u8>, Composition), Error> {
     let composition = compose(fonts, document, images)?;
     let scene = imposed_scene(document, &composition, sheet.unwrap_or(document.document.sheet))?;
-    let pdf = scene_to_pdf(&scene)?;
+    let pdf = scene_to_pdf(&at_resolution(scene, dpi)?)?;
     Ok((pdf, composition))
+}
+
+/// Resamples images finer than `dpi` down to it; `None` keeps every pixel.
+fn at_resolution(scene: Scene, dpi: Option<f64>) -> Result<Scene, Error> {
+    match dpi {
+        Some(dpi) if dpi > 0.0 => crate::images::limit_resolution(&scene, dpi),
+        _ => Ok(scene),
+    }
 }
 
 /// Writes a PDF through a temporary file and a rename.

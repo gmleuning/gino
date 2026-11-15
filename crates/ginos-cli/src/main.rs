@@ -53,6 +53,9 @@ enum Command {
         /// the imposed pages adds bleed and crop marks.
         #[arg(long)]
         sheet: Option<String>,
+        /// Images finer than this many dots per inch are resampled down to it.
+        #[arg(long, default_value_t = 300.0)]
+        dpi: f64,
         #[arg(long)]
         out: PathBuf,
     },
@@ -81,8 +84,9 @@ fn main() -> ExitCode {
             document,
             mode,
             sheet,
+            dpi,
             out,
-        } => export(&document, &mode, sheet.as_deref(), &out),
+        } => export(&document, &mode, sheet.as_deref(), dpi, &out),
         Command::FoldTest { fold, sheet, out } => fold_test(&fold, sheet.as_deref(), &out),
     };
     match result {
@@ -181,7 +185,7 @@ fn parse_sheet(text: &str) -> Result<Size, String> {
     Err(format!("\"{text}\" is not a sheet size; use A3, A4, A5, A6 or a size in millimetres such as 320x450"))
 }
 
-fn export(document: &Path, mode: &str, sheet: Option<&str>, out: &Path) -> Result<(), String> {
+fn export(document: &Path, mode: &str, sheet: Option<&str>, dpi: f64, out: &Path) -> Result<(), String> {
     let imposed = match mode {
         "reader" => false,
         "imposed" => true,
@@ -198,9 +202,9 @@ fn export(document: &Path, mode: &str, sheet: Option<&str>, out: &Path) -> Resul
     }
     let mut images = ImageCache::new(&zine.folder);
     let (pdf, composition) = if imposed {
-        imposed_pdf(&mut fonts, &mut images, &zine.document, sheet)
+        imposed_pdf(&mut fonts, &mut images, &zine.document, sheet, Some(dpi))
     } else {
-        reader_pdf(&mut fonts, &mut images, &zine.document)
+        reader_pdf(&mut fonts, &mut images, &zine.document, Some(dpi))
     }
     .map_err(|error| error.to_string())?;
     for overflow in &composition.overflows {
@@ -253,7 +257,7 @@ fn fold_test(fold: &str, sheet: Option<&str>, out: &Path) -> Result<(), String> 
     };
     let document = fold_test_document(&families, fold, pages).map_err(|error| error.to_string())?;
     let mut images = ImageCache::new(Path::new("."));
-    let (pdf, _) = imposed_pdf(&mut fonts, &mut images, &document, sheet).map_err(|error| error.to_string())?;
+    let (pdf, _) = imposed_pdf(&mut fonts, &mut images, &document, sheet, None).map_err(|error| error.to_string())?;
     write_pdf(out, &pdf).map_err(|error| error.to_string())?;
     println!("Wrote {}", out.display());
     match fold {

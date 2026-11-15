@@ -1622,29 +1622,54 @@ impl Session {
     }
 
     /// Writes a reader-spread PDF and returns the overflows found on the way.
-    pub fn export_reader_pdf(&mut self, path: &Path) -> Result<Vec<Overflow>, Error> {
-        let (pdf, composition) = reader_pdf(&mut self.fonts, &mut self.images, &self.zine.document)?;
+    pub fn export_reader_pdf(&mut self, path: &Path, dpi: Option<f64>) -> Result<Vec<Overflow>, Error> {
+        let (pdf, composition) = reader_pdf(&mut self.fonts, &mut self.images, &self.zine.document, dpi)?;
         write_pdf(path, &pdf)?;
         Ok(composition.overflows)
     }
 
     /// Writes one PDF page per document page, at the trim size.
-    pub fn export_paged_pdf(&mut self, path: &Path) -> Result<Vec<Overflow>, Error> {
-        let (pdf, composition) = crate::export::paged_pdf(&mut self.fonts, &mut self.images, &self.zine.document)?;
+    pub fn export_paged_pdf(&mut self, path: &Path, dpi: Option<f64>) -> Result<Vec<Overflow>, Error> {
+        let (pdf, composition) = crate::export::paged_pdf(&mut self.fonts, &mut self.images, &self.zine.document, dpi)?;
         write_pdf(path, &pdf)?;
         Ok(composition.overflows)
     }
 
+    /// Pixel size, stated and effective resolution, and a thumbnail of the
+    /// image in an image frame.
+    pub fn image_info(&mut self, page: usize, frame_id: &str) -> Result<crate::images::ImageInfo, Error> {
+        use base64::Engine;
+        let frame = self.zine.document.frame(page, frame_id)?.clone();
+        let stored = frame
+            .image
+            .clone()
+            .ok_or_else(|| Error::Invalid("this frame has no image".to_owned()))?;
+        let image = self.images.load(&stored)?;
+        let path = self.images.resolve(&stored);
+        let thumbnail = crate::images::thumbnail_png(&image, 480)?;
+        Ok(crate::images::ImageInfo {
+            path: path.to_string_lossy().into_owned(),
+            pixel_width: image.width,
+            pixel_height: image.height,
+            stated_dpi: crate::images::stated_dpi(&path),
+            effective_dpi: crate::images::effective_dpi(&frame, &image),
+            thumbnail: format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(thumbnail)
+            ),
+        })
+    }
+
     /// Writes one page (counted from zero) as a one-page PDF.
-    pub fn export_page_pdf(&mut self, path: &Path, page: usize) -> Result<Vec<Overflow>, Error> {
-        let (pdf, composition) = crate::export::page_pdf(&mut self.fonts, &mut self.images, &self.zine.document, page)?;
+    pub fn export_page_pdf(&mut self, path: &Path, page: usize, dpi: Option<f64>) -> Result<Vec<Overflow>, Error> {
+        let (pdf, composition) = crate::export::page_pdf(&mut self.fonts, &mut self.images, &self.zine.document, page, dpi)?;
         write_pdf(path, &pdf)?;
         Ok(composition.overflows)
     }
 
     /// Writes the imposed PDF for printing, on the document's sheet or on `sheet`.
-    pub fn export_imposed_pdf(&mut self, path: &Path, sheet: Option<Size>) -> Result<Vec<Overflow>, Error> {
-        let (pdf, composition) = imposed_pdf(&mut self.fonts, &mut self.images, &self.zine.document, sheet)?;
+    pub fn export_imposed_pdf(&mut self, path: &Path, sheet: Option<Size>, dpi: Option<f64>) -> Result<Vec<Overflow>, Error> {
+        let (pdf, composition) = imposed_pdf(&mut self.fonts, &mut self.images, &self.zine.document, sheet, dpi)?;
         write_pdf(path, &pdf)?;
         Ok(composition.overflows)
     }

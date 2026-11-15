@@ -124,6 +124,164 @@ pub fn placement(frame: &Frame, image: &LoadedImage) -> Rect {
     )
 }
 
+/// What a placed image is made of: its pixels, the resolution the file
+/// claims, and the resolution it prints at in its frame.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct ImageInfo {
+    pub path: String,
+    pub pixel_width: u32,
+    pub pixel_height: u32,
+    /// The dots per inch written in the file, when it says (PNG pHYs, JPEG JFIF).
+    pub stated_dpi: Option<f64>,
+    /// Pixels per inch at the size the image is placed in its frame.
+    pub effective_dpi: f64,
+    /// The whole picture, uncropped, as a small PNG data URI.
+    pub thumbnail: String,
+}
+
+/// Pixels per inch of an image at its placement in a frame.
+pub fn effective_dpi(frame: &Frame, image: &LoadedImage) -> f64 {
+    let crop = crop_for_fit(frame, image, frame.fit);
+    if crop.scale <= 0.0 {
+        return 0.0;
+    }
+    // crop.scale is millimetres per pixel.
+    25.4 / crop.scale
+}
+
+/// The resolution a PNG or JPEG file states, in dots per inch.
+pub fn stated_dpi(path: &Path) -> Option<f64> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        // Walk the chunks to pHYs: pixels per unit X and Y, then the unit (1 = metre).
+        let mut at = 8;
+        while at + 8 <= bytes.len() {
+            let length = u32::from_be_bytes(bytes[at..at + 4].try_into().ok()?) as usize;
+            let kind = &bytes[at + 4..at + 8];
+            let data = bytes.get(at + 8..at + 8 + length)?;
+            if kind == b"pHYs" && length >= 9 {
+                let x = u32::from_be_bytes(data[0..4].try_into().ok()?);
+                return (data[8] == 1 && x > 0).then(|| (f64::from(x) * 0.0254 * 10.0).round() / 10.0);
+            }
+            if kind == b"IDAT" {
+                return None;
+            }
+            at += 12 + length;
+        }
+        return None;
+    }
+    if bytes.starts_with(&[0xFF, 0xD8]) {
+        // The JFIF APP0 segment: units (1 = per inch, 2 = per centimetre), then X density.
+        let at = bytes.windows(5).take(64).position(|window| window == b"JFIF\0")?;
+        let units = *bytes.get(at + 7)?;
+        let x = u16::from_be_bytes([*bytes.get(at + 8)?, *bytes.get(at + 9)?]);
+        return match units {
+            1 if x > 1 => Some(f64::from(x)),
+            2 if x > 1 => Some((f64::from(x) * 2.54 * 10.0).round() / 10.0),
+            _ => None,
+        };
+    }
+    None
+}
+
+/// A small PNG of the whole image, at most `largest` pixels on its long side.
+pub fn thumbnail_png(image: &LoadedImage, largest: u32) -> Result<Vec<u8>, Error> {
+    let decoded = image::load_from_memory_with_format(&image.png, image::ImageFormat::Png)
+        .map_err(|error| Error::Invalid(format!("the image could not be read again: {error}")))?;
+    let small = decoded.thumbnail(largest, largest).to_rgba8();
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(Cursor::new(&mut png))
+        .write_image(small.as_raw(), small.width(), small.height(), image::ExtendedColorType::Rgba8)
+        .map_err(|error| Error::Invalid(format!("the thumbnail could not be written: {error}")))?;
+    Ok(png)
+}
+
+/// Resamples every image in a scene that is finer than `dpi` at its placed
+/// size down to `dpi`. Images at or below it are left alone; nothing is
+/// enlarged. The same image placed twice at the same size is resampled once.
+pub fn limit_resolution(scene: &crate::scene::Scene, dpi: f64) -> Result<crate::scene::Scene, Error> {
+    use crate::scene::{GroupItem, ImageItem, Item, Page};
+    let mut done: HashMap<(usize, u32), Arc<LoadedImage>> = HashMap::new();
+
+    fn limit_items(
+        items: &[Item],
+        dpi: f64,
+        done: &mut HashMap<(usize, u32), Arc<LoadedImage>>,
+    ) -> Result<Vec<Item>, Error> {
+        items
+            .iter()
+            .map(|item| {
+                Ok(match item {
+                    Item::Image(image) => {
+                        let target = (image.placement.w / 25.4 * dpi).ceil().max(1.0) as u32;
+                        // Two percent of slack so an image already at the target is not resampled.
+                        if f64::from(image.image.width) <= f64::from(target) * 1.02 {
+                            item.clone()
+                        } else {
+                            let key = (Arc::as_ptr(&image.image) as usize, target);
+                            let smaller = match done.get(&key) {
+                                Some(found) => found.clone(),
+                                None => {
+                                    let made = Arc::new(resample(&image.image, target)?);
+                                    done.insert(key, made.clone());
+                                    made
+                                }
+                            };
+                            Item::Image(ImageItem {
+                                image: smaller,
+                                placement: image.placement,
+                                clip: image.clip,
+                            })
+                        }
+                    }
+                    Item::Group(group) => Item::Group(GroupItem {
+                        transform: group.transform,
+                        clip: group.clip,
+                        items: limit_items(&group.items, dpi, done)?,
+                    }),
+                    other => other.clone(),
+                })
+            })
+            .collect()
+    }
+
+    let pages = scene
+        .pages
+        .iter()
+        .map(|page| {
+            let frames = page
+                .frames
+                .iter()
+                .map(|frame| {
+                    Ok(crate::scene::FrameScene {
+                        id: frame.id.clone(),
+                        items: limit_items(&frame.items, dpi, &mut done)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            Ok(Page {
+                width: page.width,
+                height: page.height,
+                frames,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    Ok(crate::scene::Scene { pages })
+}
+
+fn resample(image: &LoadedImage, width: u32) -> Result<LoadedImage, Error> {
+    let decoded = image::load_from_memory_with_format(&image.png, image::ImageFormat::Png)
+        .map_err(|error| Error::Invalid(format!("the image could not be read again: {error}")))?
+        .to_rgba8();
+    let height = ((f64::from(image.height) * f64::from(width) / f64::from(image.width.max(1))).round() as u32).max(1);
+    let resized = image::imageops::resize(&decoded, width, height, image::imageops::FilterType::Lanczos3);
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(Cursor::new(&mut png))
+        .write_image(resized.as_raw(), width, height, image::ExtendedColorType::Rgba8)
+        .map_err(|error| Error::Invalid(format!("the resampled image could not be written: {error}")))?;
+    Ok(LoadedImage { width, height, png })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +323,38 @@ mod tests {
         let mut cache = ImageCache::new(Path::new("C:\\nowhere"));
         let error = cache.load("missing.png").unwrap_err();
         assert!(error.to_string().starts_with("the image C:\\nowhere\\missing.png could not be loaded"));
+    }
+
+    #[test]
+    fn effective_dpi_follows_the_placed_size() {
+        // 1000 pixels filling a frame 100 mm wide: 254 pixels per inch.
+        let frame = Frame::image("picture", 0.0, 0.0, 100.0, 50.0, Some("x.png"));
+        let picture = image(1000, 500);
+        assert!((effective_dpi(&frame, &picture) - 254.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn stated_dpi_from_png_and_jpeg_headers() {
+        let folder = std::env::temp_dir().join("ginos-stated-dpi");
+        std::fs::create_dir_all(&folder).unwrap();
+        // A PNG whose pHYs says 11811 pixels per metre (300 dpi).
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend_from_slice(&13u32.to_be_bytes());
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&[0; 13 + 4]);
+        png.extend_from_slice(&9u32.to_be_bytes());
+        png.extend_from_slice(b"pHYs");
+        png.extend_from_slice(&11811u32.to_be_bytes());
+        png.extend_from_slice(&11811u32.to_be_bytes());
+        png.push(1);
+        png.extend_from_slice(&[0; 4]);
+        let path = folder.join("a.png");
+        std::fs::write(&path, &png).unwrap();
+        assert_eq!(stated_dpi(&path), Some(300.0));
+        // A JPEG whose JFIF header says 72 dots per inch.
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 16, b'J', b'F', b'I', b'F', 0, 1, 1, 1, 0, 72, 0, 72, 0, 0];
+        let path = folder.join("b.jpg");
+        std::fs::write(&path, jpeg).unwrap();
+        assert_eq!(stated_dpi(&path), Some(72.0));
     }
 }

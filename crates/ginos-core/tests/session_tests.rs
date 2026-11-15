@@ -141,7 +141,7 @@ fn reader_spreads_export_and_render() {
     let mut session = open_sample();
     let folder = common::output_folder("reader-export");
     let path = folder.join("sample-reader.pdf");
-    let overflows = session.export_reader_pdf(&path).unwrap();
+    let overflows = session.export_reader_pdf(&path, None).unwrap();
     assert!(overflows.is_empty());
     let bytes = std::fs::read(&path).unwrap();
     let pdf = Pdf::new(bytes).expect("the PDF parses");
@@ -176,7 +176,7 @@ fn paged_export_has_one_trim_sized_page_per_page() {
     let mut session = open_sample();
     let folder = common::output_folder("paged-export");
     let path = folder.join("sample-paged.pdf");
-    let overflows = session.export_paged_pdf(&path).unwrap();
+    let overflows = session.export_paged_pdf(&path, None).unwrap();
     assert!(overflows.is_empty());
     let pdf = Pdf::new(std::fs::read(&path).unwrap()).expect("the PDF parses");
     assert_eq!(pdf.pages().len(), 8);
@@ -191,8 +191,27 @@ fn a_single_page_exports_alone() {
     let mut session = open_sample();
     let folder = common::output_folder("page-export");
     let path = folder.join("sample-page-3.pdf");
-    session.export_page_pdf(&path, 2).unwrap();
+    session.export_page_pdf(&path, 2, None).unwrap();
     let pdf = Pdf::new(std::fs::read(&path).unwrap()).expect("the PDF parses");
     assert_eq!(pdf.pages().len(), 1);
-    assert!(session.export_page_pdf(&folder.join("none.pdf"), 99).is_err());
+    assert!(session.export_page_pdf(&folder.join("none.pdf"), 99, None).is_err());
+}
+
+#[test]
+fn a_print_resolution_reduces_fine_pictures_only() {
+    let mut session = open_sample();
+    let folder = common::output_folder("print-dpi");
+    let full = folder.join("every-pixel.pdf");
+    let reduced = folder.join("at-50-dpi.pdf");
+    let generous = folder.join("at-5000-dpi.pdf");
+    session.export_paged_pdf(&full, None).unwrap();
+    session.export_paged_pdf(&reduced, Some(50.0)).unwrap();
+    session.export_paged_pdf(&generous, Some(5000.0)).unwrap();
+    let size = |path: &std::path::Path| std::fs::metadata(path).unwrap().len();
+    assert!(size(&reduced) < size(&full), "50 dpi must shrink the picture: {} vs {}", size(&reduced), size(&full));
+    assert_eq!(size(&generous), size(&full), "a resolution above the picture's leaves it alone");
+    let info = session.image_info(2, "picture").unwrap();
+    assert!(info.effective_dpi > 0.0);
+    assert!(info.pixel_width > 0 && info.pixel_height > 0);
+    assert!(info.thumbnail.starts_with("data:image/png;base64,"));
 }

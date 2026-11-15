@@ -11,7 +11,6 @@ use ginos_core::fonts::{fixture_font_folder, Fonts};
 use ginos_core::model::{Columns, Fold, FrameKind, Frame, Paragraph, Size, Story};
 use ginos_core::presets::{default_margins, NewDocument};
 use ginos_core::session::{Motion, Session, Tool};
-use ginos_core::text::TextPosition;
 use hayro::hayro_syntax::Pdf;
 
 fn sample_zine() -> PathBuf {
@@ -329,11 +328,11 @@ fn a_new_document_is_created_saved_and_exported_imposed() {
 
     let out = common::output_folder("imposed");
     let a4 = out.join("new-a4.pdf");
-    session.export_imposed_pdf(&a4, None).unwrap();
+    session.export_imposed_pdf(&a4, None, Some(300.0)).unwrap();
     let pdf = Pdf::new(std::fs::read(&a4).unwrap()).unwrap();
     assert_eq!(pdf.pages().len(), 8, "four sheets, front and back");
     let a3 = out.join("new-a3.pdf");
-    session.export_imposed_pdf(&a3, Some(Size { width: 297.0, height: 420.0 })).unwrap();
+    session.export_imposed_pdf(&a3, Some(Size { width: 297.0, height: 420.0 }), Some(300.0)).unwrap();
     assert_eq!(Pdf::new(std::fs::read(&a3).unwrap()).unwrap().pages().len(), 8);
 
     // Creating into a folder that holds files is refused.
@@ -409,7 +408,7 @@ fn the_sample_imposes_on_a4_and_a3() {
     let folder = common::output_folder("imposed");
     for (name, sheet, width) in [("a4", None, 297.0), ("a3", Some(Size { width: 420.0, height: 297.0 }), 420.0)] {
         let path = folder.join(format!("sample-{name}.pdf"));
-        session.export_imposed_pdf(&path, sheet).unwrap();
+        session.export_imposed_pdf(&path, sheet, None).unwrap();
         let pdf = Pdf::new(std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(pdf.pages().len(), 4, "two sheets, front and back");
         let cache = RenderCache::new();

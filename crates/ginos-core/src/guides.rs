@@ -7,11 +7,15 @@ use std::fmt::Write as _;
 use crate::model::Document;
 use crate::snap::{column_edges, page_margins};
 
-const MARGIN_COLOUR: &str = "#5b8def";
-const COLUMN_COLOUR: &str = "#a9c1f5";
-const PRINTER_COLOUR: &str = "#d9534f";
-const BLEED_COLOUR: &str = "#e8a33d";
-const SPINE_COLOUR: &str = "#8a8a8a";
+/// Every guide is the same light grey dotted line: guides are not part of
+/// the design and should stay out of its way.
+const GUIDE_GREY: &str = "#c9c9c9";
+const DOTTED: &str = "stroke-dasharray=\"0.5 3\" stroke-linecap=\"round\"";
+const MARGIN_COLOUR: &str = GUIDE_GREY;
+const COLUMN_COLOUR: &str = GUIDE_GREY;
+const PRINTER_COLOUR: &str = GUIDE_GREY;
+const BLEED_COLOUR: &str = GUIDE_GREY;
+const SPINE_COLOUR: &str = GUIDE_GREY;
 
 /// An SVG fragment in page millimetres for one page's guides.
 pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
@@ -23,7 +27,7 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
     // Type area.
     let _ = write!(
         svg,
-        "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"margin\" stroke=\"{MARGIN_COLOUR}\" stroke-width=\"1\" vector-effect=\"non-scaling-stroke\"/>",
+        "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"margin\" stroke=\"{MARGIN_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
         n(left),
         n(top),
         n(size.width - left - right),
@@ -35,7 +39,7 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
     for x in edges.iter().skip(1).take(edges.len().saturating_sub(2)) {
         let _ = write!(
             svg,
-            "<line x1=\"{x}\" y1=\"{}\" x2=\"{x}\" y2=\"{}\" class=\"column\" stroke=\"{COLUMN_COLOUR}\" stroke-width=\"1\" vector-effect=\"non-scaling-stroke\"/>",
+            "<line x1=\"{x}\" y1=\"{}\" x2=\"{x}\" y2=\"{}\" class=\"column\" stroke=\"{COLUMN_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
             n(top),
             n(size.height - bottom),
             x = n(*x)
@@ -50,7 +54,7 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
         let b = settings.bleed;
         let _ = write!(
             svg,
-            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"bleed\" stroke=\"{BLEED_COLOUR}\" stroke-width=\"1\" stroke-dasharray=\"4 3\" vector-effect=\"non-scaling-stroke\"/>",
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"bleed\" stroke=\"{BLEED_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
             n(-b),
             n(-b),
             n(size.width + 2.0 * b),
@@ -67,7 +71,7 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
         };
         let _ = write!(
             svg,
-            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"printer\" stroke=\"{PRINTER_COLOUR}\" stroke-width=\"1\" stroke-dasharray=\"2 2\" vector-effect=\"non-scaling-stroke\"/>",
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" class=\"printer\" stroke=\"{PRINTER_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
             n(x),
             n(m),
             n(width),
@@ -79,7 +83,7 @@ pub fn page_guides_svg(document: &Document, page_index: usize) -> String {
     let spine_x = if Document::is_left_page(page_index) { size.width } else { 0.0 };
     let _ = write!(
         svg,
-        "<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"{}\" class=\"spine\" stroke=\"{SPINE_COLOUR}\" stroke-width=\"2\" vector-effect=\"non-scaling-stroke\"/>",
+        "<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"{}\" class=\"spine\" stroke=\"{SPINE_COLOUR}\" stroke-width=\"1\" {DOTTED} vector-effect=\"non-scaling-stroke\"/>",
         n(size.height),
         x = n(spine_x)
     );
