@@ -358,3 +358,23 @@ mod tests {
         assert_eq!(stated_dpi(&path), Some(72.0));
     }
 }
+
+/// A picture for the desk behind the pages (a preference, not part of any
+/// document): read from `path`, reduced to at most `largest` pixels on its
+/// long side and returned as a JPEG data URL the interface can show.
+pub fn desk_background_data_url(path: &Path, largest: u32) -> Result<String, Error> {
+    use base64::Engine;
+    let decoded = image::open(path)
+        .map_err(|error| Error::Invalid(format!("{} could not be read as a picture: {error}", path.display())))?;
+    let small = if decoded.width().max(decoded.height()) > largest {
+        decoded.resize(largest, largest, image::imageops::FilterType::Lanczos3)
+    } else {
+        decoded
+    };
+    let rgb = small.to_rgb8();
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut jpeg), 88)
+        .write_image(rgb.as_raw(), rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
+        .map_err(|error| Error::Invalid(format!("the picture could not be prepared: {error}")))?;
+    Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(jpeg)))
+}

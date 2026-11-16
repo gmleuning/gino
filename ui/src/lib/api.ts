@@ -302,6 +302,8 @@ export const api = {
   openInDefaultApp: (path: string) => invoke<void>("open_in_default_app", { path }),
   getPreferences: () => invoke<StoredPreferences>("get_preferences"),
   setPreferences: (preferences: StoredPreferences | object) => invoke<void>("set_preferences", { preferences }),
+  /** A picture for the desk, reduced and returned as a data URL. */
+  deskBackground: (path: string) => invoke<string>("desk_background", { path }),
   defaultExportPath: (suffix: string) => invoke<string>("default_export_path", { suffix }),
   fontFamilies: () => invoke<string[]>("font_families"),
 };

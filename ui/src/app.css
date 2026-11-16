@@ -755,7 +755,7 @@ input[type="radio"] {
 /* ---------- desk ---------- */
 .canvas-wrap {
   /* One large non-repeating field, fixed while the pages scroll; beyond it, the flat colour. */
-  background: var(--desk) var(--desk-grain) center / auto no-repeat;
+  background: var(--desk) var(--desk-grain) center / var(--desk-size, auto) no-repeat;
 }
 .canvas-wrap:has(> .empty) {
   background: var(--opening) var(--opening-grain) center / auto no-repeat;
@@ -871,4 +871,23 @@ input[type="radio"] {
 .window-controls svg {
   display: block;
   shape-rendering: crispEdges;
+}
+
+/* Preferences: the desk picture. */
+.modal .desk-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.modal .desk-choice .label {
+  color: var(--muted);
+}
+.modal .desk-choice .value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

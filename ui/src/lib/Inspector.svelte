@@ -170,7 +170,7 @@
     </div>
   {:else if selection.kind === "text"}
     <div class="path">
-      Story "{selection.story ?? "—"}", frame {selection.thread_position + 1} of {selection.thread_length}
+      Story "{selection.story ?? "—"}", frame {selection.thread_position} of {selection.thread_length}
     </div>
     <div class="row">
       {#if !app.text}

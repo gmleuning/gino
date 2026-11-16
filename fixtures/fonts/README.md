@@ -1,8 +1,9 @@
 # Fixture fonts
 
-Test fonts used by `ginos-core` tests and as the fallback for `ginos-cli spike`.
-Both are published under the SIL Open Font License 1.1 by their authors; Gino
-itself carries no licence.
+The two fonts Gino installs with the program (the defaults for new zines), also
+used by the `ginos-core` tests and `ginos-cli spike`. The installer copies them,
+with this note, into Gino's `fonts` folder. Both are published under the SIL
+Open Font License 1.1 by their authors; Gino itself carries no licence.
 
 | File | Family | Source |
 | --- | --- | --- |

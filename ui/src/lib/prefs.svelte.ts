@@ -11,6 +11,8 @@ export interface Preferences {
   theme: Theme;
   /** Interface font family; empty for the system's. */
   ui_font: string;
+  /** A picture for the desk behind the pages; empty for Gino's own. */
+  desk_image: string;
   /** Interface text size in pixels. */
   ui_font_size: number;
   /** New zines start with cover image frames and a threaded story. */
@@ -36,6 +38,7 @@ export interface Preferences {
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: "system",
   ui_font: "",
+  desk_image: "",
   ui_font_size: 13,
   starter_frames: true,
   show_korean: false,
@@ -115,6 +118,32 @@ export function applyAppearance(preferences: Preferences) {
     preferences.ui_font ? `"${preferences.ui_font}", "Malgun Gothic", system-ui, sans-serif` : `"Segoe UI", "Malgun Gothic", system-ui, sans-serif`,
   );
   root.style.setProperty("--ui-size", `${preferences.ui_font_size}px`);
+  applyDeskImage(preferences.desk_image);
+}
+
+let deskShown = "";
+
+/** Puts the chosen picture behind the pages, or Gino's own field when none is chosen. */
+async function applyDeskImage(path: string) {
+  if (path === deskShown) return;
+  deskShown = path;
+  const root = document.documentElement;
+  if (!path) {
+    root.style.removeProperty("--desk-grain");
+    root.style.removeProperty("--desk-size");
+    return;
+  }
+  try {
+    const url = await api.deskBackground(path);
+    if (deskShown !== path) return;
+    root.style.setProperty("--desk-grain", `url("${url}")`);
+    root.style.setProperty("--desk-size", "cover");
+  } catch {
+    // A picture that has moved or will not open: keep Gino's own field.
+    deskShown = "";
+    root.style.removeProperty("--desk-grain");
+    root.style.removeProperty("--desk-size");
+  }
 }
 
 /** Follow Windows when the theme is "system". */

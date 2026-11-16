@@ -30,10 +30,19 @@ fn with_session<T>(
     f(session).map_err(|error| error.to_string())
 }
 
-/// System fonts, plus the fixture fonts so sample documents open anywhere.
+/// The fonts installed with Gino (Crimson Text and Gowun Dodum, the defaults
+/// for new zines), found once the window starts.
+static BUNDLED_FONTS: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// System fonts, plus the fonts that come with Gino so new zines and the
+/// sample documents look the same on every computer.
 fn fonts() -> Fonts {
     let mut fonts = Fonts::with_system_fonts();
-    fonts.add_folder(&ginos_core::fonts::fixture_font_folder());
+    match BUNDLED_FONTS.get().filter(|folder| folder.is_dir()) {
+        Some(folder) => fonts.add_folder(folder),
+        // Running from the source tree (`tauri dev`): the fixture folder.
+        None => fonts.add_folder(&ginos_core::fonts::fixture_font_folder()),
+    }
     fonts
 }
 
@@ -346,6 +355,12 @@ fn export_page(path: String, page: usize, dpi: Option<f64>, state: State<'_, App
     })
 }
 
+/// A picture chosen for the desk behind the pages, ready to show.
+#[tauri::command]
+fn desk_background(path: String) -> CommandResult<String> {
+    ginos_core::images::desk_background_data_url(Path::new(&path), 2560).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 fn image_info(page: usize, frame_id: String, state: State<'_, AppState>) -> CommandResult<ginos_core::images::ImageInfo> {
     with_session(&state, |session| session.image_info(page, &frame_id))
@@ -420,6 +435,12 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .setup(|app| {
+            if let Ok(folder) = app.path().resource_dir() {
+                let _ = BUNDLED_FONTS.set(folder.join("fonts"));
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             open_document,
             new_document,
@@ -469,6 +490,7 @@ fn main() {
             image_info,
             get_preferences,
             set_preferences,
+            desk_background,
             default_export_path,
             font_families,
         ])

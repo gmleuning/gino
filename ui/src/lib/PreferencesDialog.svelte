@@ -5,6 +5,7 @@
   import { COMMANDS, DEFAULT_SHORTCUTS, comboOf, describe, type CommandId } from "./commands";
   import { DEFAULT_PREFERENCES, prefs, type Preferences } from "./prefs.svelte";
   import { app } from "./state.svelte";
+  import { open } from "@tauri-apps/plugin-dialog";
 
   type Tab = "general" | "new" | "shortcuts";
 
@@ -20,6 +21,19 @@
 
   const families = $derived(app.fontFamilies);
   const groups = $derived([...new Set(COMMANDS.map((command) => command.group))]);
+
+  /** Chooses a picture for the desk; it is shown once the preferences are saved. */
+  async function chooseDeskImage() {
+    const chosen = await open({
+      title: "Choose a picture for the desk",
+      filters: [{ name: "Pictures", extensions: ["jpg", "jpeg", "png", "tif", "tiff"] }],
+    });
+    if (typeof chosen === "string") draft.desk_image = chosen;
+  }
+
+  function fileName(path: string) {
+    return path.split(/[\\/]/).pop() ?? path;
+  }
 
   function withCurrent(list: string[], value: string): string[] {
     return !value || list.includes(value) ? list : [value, ...list];
@@ -112,7 +126,13 @@
           </select>
         </label>
       </div>
-      <div class="note">The page always stays white, as it will print.</div>
+      <div class="desk-choice">
+        <span class="label">Desk behind the pages</span>
+        <span class="value" title={draft.desk_image || undefined}>{draft.desk_image ? fileName(draft.desk_image) : "Gino's own"}</span>
+        <button onclick={chooseDeskImage}>Choose picture…</button>
+        <button onclick={() => (draft.desk_image = "")} disabled={!draft.desk_image}>Use Gino's own</button>
+      </div>
+      <div class="note">The page always stays white, as it will print. A chosen picture fills the desk in both colour schemes.</div>
 
       <h3>Korean</h3>
       <label class="check-row"><input type="checkbox" bind:checked={draft.show_korean} />Show the Korean options (font, scale, line breaking)</label>
