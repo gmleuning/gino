@@ -2,9 +2,9 @@
 :root {
   --paper: #ffffff;
   --desk: #7b7f79;                 /* grey of the card's ground */
-  --desk-grain: url("./assets/desk-grain.png");
+  --desk-grain: url("./assets/desk-field.jpg");
   --opening: #d03d1c;              /* the opening screen: Lo Sport cover red */
-  --opening-grain: url("./assets/desk-grain-red.png");
+  --opening-grain: url("./assets/desk-field-red.jpg");
   --ink: #1b1c1a;
   --muted: #62655f;
   --line: #d4d3cc;
@@ -37,9 +37,9 @@
 /* ---------- Uomo di ferro (dark). The page stays white. ---------- */
 :root[data-theme="dark"] {
   --desk: #2a2826;
-  --desk-grain: url("./assets/desk-grain-dark.png");
+  --desk-grain: url("./assets/desk-field-dark.jpg");
   --opening: #2a2826;
-  --opening-grain: url("./assets/desk-grain-dark.png");
+  --opening-grain: url("./assets/desk-field-dark.jpg");
   --ink: #ece6d6;
   --muted: #a19b8d;
   --line: #383531;
@@ -754,10 +754,11 @@ input[type="radio"] {
 
 /* ---------- desk ---------- */
 .canvas-wrap {
-  background: var(--desk) var(--desk-grain);
+  /* One large non-repeating field, fixed while the pages scroll; beyond it, the flat colour. */
+  background: var(--desk) var(--desk-grain) center / auto no-repeat;
 }
 .canvas-wrap:has(> .empty) {
-  background: var(--opening) var(--opening-grain);
+  background: var(--opening) var(--opening-grain) center / auto no-repeat;
 }
 .empty {
   color: var(--status-ink);
